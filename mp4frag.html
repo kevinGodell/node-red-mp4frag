@@ -1,0 +1,47 @@
+<script type="text/javascript">
+  RED.nodes.registerType('mp4frag', {
+    align: 'right',
+    category: 'cctv',
+    color: '#DEBD5C',
+    defaults: {
+      hlsBase: {
+        value: '',
+        required: true,
+        validate: RED.validators.regex(/^[a-z_]{3,50}$/i)
+      },
+      hlsListSize: {
+        value: 4,
+        required: true,
+        validate: function (hlsListSize) {
+          return hlsListSize >= 2 && hlsListSize <= 10;
+        }
+      }
+    },
+    icon: 'font-awesome/fa-file-video-o',
+    inputLabels: 'fragmented mp4',
+    inputs: 1,
+    label: function () {
+      return this.hlsBase || 'mp4frag';
+    },
+    outputs: 0
+  });
+</script>
+
+<script data-template-name="mp4frag" type="text/html">
+
+  <div class="form-row">
+    <label for="node-input-hlsBase"><i class="fa fa-tag"></i> Base</label>
+    <input type="text" id="node-input-hlsBase" placeholder="unique_name">
+  </div>
+
+  <div class="form-row">
+    <label for="node-input-hlsListSize"><i class="fa fa-list-ol"></i> List Size</label>
+    <input type="number" id="node-input-hlsListSize" placeholder="4" min="2" max="10">
+  </div>
+
+</script>
+
+<script data-help-name="mp4frag" type="text/html">
+  <p>Parse a fragmented mp4 from a buffer.</p>
+</script>
+

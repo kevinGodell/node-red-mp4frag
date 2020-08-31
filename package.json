@@ -1,0 +1,48 @@
+{
+  "name": "node-red-contrib-mp4frag",
+  "version": "0.1.0",
+  "description": "node-red wrapper for mp4frag",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "pack": "npm pack",
+    "lint": "eslint --fix --ext .js --ignore-path .gitignore ."
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kevinGodell/node-red-contrib-mp4frag.git"
+  },
+  "keywords": [
+    "node-red",
+    "buffer",
+    "mp4",
+    "fragmented",
+    "fmp4",
+    "parser",
+    "ffmpeg",
+    "video"
+  ],
+  "author": "Kevin Godell <kevin.godell@gmail.com> (https://github.com/kevinGodell)",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/kevinGodell/node-red-contrib-mp4frag/issues"
+  },
+  "homepage": "https://github.com/kevinGodell/node-red-contrib-mp4frag#readme",
+  "dependencies": {
+    "mp4frag": "github:kevinGodell/mp4frag"
+  },
+  "files": [
+    "mp4frag.js",
+    "mp4frag.html"
+  ],
+  "node-red": {
+    "nodes": {
+      "mp4frag": "mp4frag.js"
+    }
+  },
+  "devDependencies": {
+    "eslint": "^7.7.0",
+    "eslint-config-prettier": "^6.11.0",
+    "eslint-plugin-prettier": "^3.1.4",
+    "prettier": "^2.0.5"
+  }
+}
