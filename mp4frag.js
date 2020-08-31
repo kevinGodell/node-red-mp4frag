@@ -94,7 +94,7 @@ module.exports = function (RED) {
 
       this.status({ fill: 'green', shape: 'ring', text: 'ready' });
     } catch (err) {
-      this.status({ fill: 'red', shape: 'dot', text: err });
+      this.status({ fill: 'red', shape: 'dot', text: err.toString() });
 
       this.error(err);
     }
