@@ -31,11 +31,11 @@ module.exports = function (RED) {
       globalContext.set(hlsBase, mp4frag);
 
       const onInitialized = data => {
-        this.status({ fill: 'green', shape: 'dot', text: 'mp4 initialized' });
+        this.status({ fill: 'green', shape: 'dot', text: 'initialized' });
       };
 
       const onSegment = segment => {
-        this.status({ fill: 'green', shape: 'dot', text: `mp4 segment ${mp4frag.sequence}` });
+        this.status({ fill: 'green', shape: 'dot', text: `segment ${mp4frag.sequence}` });
       };
 
       const onError = err => {
