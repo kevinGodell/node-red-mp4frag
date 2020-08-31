@@ -8,10 +8,10 @@ Mp4Frag.prototype.toString = function () {
 };
 
 module.exports = function (RED) {
-  function Mp4FragNode (config) {
+  function Mp4FragNode(config) {
     RED.nodes.createNode(this, config);
 
-    const {hlsBase, hlsListSize} = config;
+    const { hlsBase, hlsListSize } = config;
 
     const globalContext = this.context().global;
 
@@ -19,34 +19,33 @@ module.exports = function (RED) {
     if (globalContext.get(hlsBase) !== undefined) {
       const err = `hlsBase '${hlsBase}' already in use`;
 
-      this.status({fill: 'red', shape: 'dot', text: err});
+      this.status({ fill: 'red', shape: 'dot', text: err });
 
       return this.error(err);
     }
 
     try {
-
       // mp4frag can throw if given bad hlsBase
-      const mp4frag = new Mp4Frag({hlsBase, hlsListSize});
+      const mp4frag = new Mp4Frag({ hlsBase, hlsListSize });
 
       globalContext.set(hlsBase, mp4frag);
 
       const onInitialized = data => {
-        this.status({fill: 'green', shape: 'dot', text: 'mp4 initialized'});
+        this.status({ fill: 'green', shape: 'dot', text: 'mp4 initialized' });
       };
 
       const onSegment = segment => {
-        this.status({fill: 'green', shape: 'dot', text: `mp4 segment ${mp4frag.sequence}`});
+        this.status({ fill: 'green', shape: 'dot', text: `mp4 segment ${mp4frag.sequence}` });
       };
 
       const onError = err => {
-        this.status({fill: 'red', shape: 'dot', text: err});
+        this.status({ fill: 'red', shape: 'dot', text: err });
 
         this.error(err);
       };
 
       const onInput = msg => {
-        const {payload} = msg;
+        const { payload } = msg;
 
         if (Buffer.isBuffer(payload) === true) {
           return mp4frag.write(payload);
@@ -54,7 +53,7 @@ module.exports = function (RED) {
 
         const err = 'input must be a buffer';
 
-        this.status({fill: 'red', shape: 'dot', text: err});
+        this.status({ fill: 'red', shape: 'dot', text: err });
 
         this.error(err);
       };
@@ -75,9 +74,9 @@ module.exports = function (RED) {
 
           this.off('close', onClose);
 
-          this.status({fill: 'red', shape: 'ring', text: 'removed'});
+          this.status({ fill: 'red', shape: 'ring', text: 'removed' });
         } else {
-          this.status({fill: 'red', shape: 'dot', text: 'closed'});
+          this.status({ fill: 'red', shape: 'dot', text: 'closed' });
         }
 
         done();
@@ -93,9 +92,9 @@ module.exports = function (RED) {
 
       this.on('close', onClose);
 
-      this.status({fill: 'green', shape: 'ring', text: 'ready'});
+      this.status({ fill: 'green', shape: 'ring', text: 'ready' });
     } catch (err) {
-      this.status({fill: 'red', shape: 'dot', text: err});
+      this.status({ fill: 'red', shape: 'dot', text: err });
 
       this.error(err);
     }
