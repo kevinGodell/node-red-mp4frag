@@ -12,7 +12,7 @@
 #### When?
 - Using ffmpeg to connect to a video source and piping out a fragmented mp4.
 #### Where?
-- mp4frag instance will be accessible in the global context.
+- mp4frag instance will be accessible in the selected context (flow or global).
 - `const mp4frag = global.get('unique_name');`
 #### Requirements
 - Input must be a buffer stream containing a properly fragmented mp4.
