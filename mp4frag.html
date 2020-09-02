@@ -4,16 +4,34 @@
     category: 'cctv',
     color: '#DEBD5C',
     defaults: {
-      hlsBase: {
-        value: '',
+      uniqueName: {
+        value: 'Change_This_Name',
+        type: 'str',
         required: true,
-        validate: RED.validators.regex(/^[a-z_]{3,50}$/i)
+        validate: RED.validators.regex(/^(?:(?!^Change_This_Name$)[a-z_]){3,50}$/i)
       },
       hlsListSize: {
         value: 4,
+        type: 'num',
         required: true,
         validate: function (hlsListSize) {
           return hlsListSize >= 2 && hlsListSize <= 10;
+        }
+      },
+      contextAccess: {
+        value: 'none',
+        type: 'str',
+        required: true,
+        validate: function (contextAccess) {
+          return ['none', 'flow', 'global'].includes(contextAccess);
+        }
+      },
+      httpRoutes: {
+        value: true,
+        type: 'bool',
+        required: true,
+        validate: function (httpRoutes) {
+          return typeof httpRoutes === 'boolean';
         }
       }
     },
@@ -21,22 +39,37 @@
     inputLabels: 'buffer',
     inputs: 1,
     label: function () {
-      return this.hlsBase || 'mp4frag';
+      return this.uniqueName || 'mp4frag';
     },
-    outputs: 0
+    outputLabels: 'status',
+    outputs: 1
   });
 </script>
 
 <script data-template-name="mp4frag" type="text/html">
 
   <div class="form-row">
-    <label for="node-input-hlsBase"><i class="fa fa-tag"></i> Base</label>
-    <input type="text" id="node-input-hlsBase" placeholder="unique_name">
+    <label style="width:9rem;" for="node-input-uniqueName"><i class="fa fa-tag"></i> Unique Name</label>
+    <input style="width:auto;min-width:15rem" type="text" id="node-input-uniqueName" placeholder="Unique_Name">
   </div>
 
   <div class="form-row">
-    <label for="node-input-hlsListSize"><i class="fa fa-list-ol"></i> List Size</label>
-    <input type="number" id="node-input-hlsListSize" placeholder="4" min="2" max="10">
+    <label style="width:9rem" for="node-input-hlsListSize"><i class="fa fa-list-ol"></i> HLS List Size</label>
+    <input style="width:auto;min-width:15rem" type="number" id="node-input-hlsListSize" placeholder="4" min="2" max="10">
+  </div>
+
+  <div class="form-row">
+    <label style="width:9rem" for="node-input-contextAccess"><i class="fa fa-database"></i> Context Access</label>
+    <select style="width:auto;min-width:15rem" id="node-input-contextAccess">
+      <option value="none">none</option>
+      <option value="flow">flow</option>
+      <option value="global">global</option>
+    </select>
+  </div>
+
+  <div class="form-row">
+    <label style="width:9rem" for="node-input-httpRoutes"><i class="fa fa-globe"></i> HTTP Routes</label>
+    <input style="width:auto" type="checkbox" id="node-input-httpRoutes">
   </div>
 
 </script>
@@ -44,4 +77,3 @@
 <script data-help-name="mp4frag" type="text/html">
   <p>Parse a fragmented mp4 from a buffer.</p>
 </script>
-
