@@ -34,56 +34,64 @@ module.exports = RED => {
     }
   };
 
-  const addRoutes = (uniqueName, mp4frag) => {
-    RED.httpNode.get(`/${uniqueName}.m3u8`, (req, res) => {
-      const m3u8 = mp4frag && mp4frag.m3u8;
+  const addRoutes = (httpRoutes, uniqueName, mp4frag) => {
+    if (httpRoutes) {
+      // define routes early
+      const playlistPath = `/${uniqueName}.m3u8`;
+      const playlistTxtPath = `/${uniqueName}.m3u8.txt`;
+      const initFragPath = `/init-${uniqueName}.mp4`;
+      const segmentPath = `/${uniqueName}:seq(\\d+).m4s`;
 
-      if (!m3u8) {
-        return res.status(404).send('m3u8 playlist not found');
-      }
+      RED.httpNode.get(playlistPath, (req, res) => {
+        const m3u8 = mp4frag && mp4frag.m3u8;
 
-      res.set('content-type', 'application/vnd.apple.mpegurl');
+        if (!m3u8) {
+          return res.status(404).send('m3u8 playlist not found');
+        }
 
-      res.send(m3u8);
-    });
+        res.set('content-type', 'application/vnd.apple.mpegurl');
 
-    RED.httpNode.get(`/${uniqueName}.m3u8.txt`, (req, res) => {
-      const m3u8 = mp4frag && mp4frag.m3u8;
+        res.send(m3u8);
+      });
 
-      if (!m3u8) {
-        return res.status(404).send('m3u8 playlist not found');
-      }
+      RED.httpNode.get(playlistTxtPath, (req, res) => {
+        const m3u8 = mp4frag && mp4frag.m3u8;
 
-      res.set('content-type', 'text/plain');
+        if (!m3u8) {
+          return res.status(404).send('m3u8 playlist not found');
+        }
 
-      res.send(m3u8);
-    });
+        res.set('content-type', 'text/plain');
 
-    RED.httpNode.get(`/init-${uniqueName}.mp4`, (req, res) => {
-      const initialization = mp4frag && mp4frag.initialization;
+        res.send(m3u8);
+      });
 
-      if (!initialization) {
-        return res.status(404).send('initialization fragment not found');
-      }
+      RED.httpNode.get(initFragPath, (req, res) => {
+        const initialization = mp4frag && mp4frag.initialization;
 
-      res.set('content-type', 'video/mp4');
+        if (!initialization) {
+          return res.status(404).send('initialization fragment not found');
+        }
 
-      res.send(initialization);
-    });
+        res.set('content-type', 'video/mp4');
 
-    RED.httpNode.get(`/${uniqueName}:seq(\\d+).m4s`, (req, res) => {
-      const { seq } = req.params;
+        res.send(initialization);
+      });
 
-      const segment = mp4frag && mp4frag.getHlsSegment(seq);
+      RED.httpNode.get(segmentPath, (req, res) => {
+        const { seq } = req.params;
 
-      if (!segment) {
-        return res.status(404).send(`segment ${seq} not found`);
-      }
+        const segment = mp4frag && mp4frag.getHlsSegment(seq);
 
-      res.set('content-type', 'video/mp4');
+        if (!segment) {
+          return res.status(404).send(`segment ${seq} not found`);
+        }
 
-      res.send(segment);
-    });
+        res.set('content-type', 'video/mp4');
+
+        res.send(segment);
+      });
+    }
   };
 
   function Mp4FragNode(config) {
@@ -93,18 +101,21 @@ module.exports = RED => {
 
     try {
       // mp4frag can throw if given bad hlsBase
-      const mp4frag = new Mp4Frag({ hlsBase: uniqueName, hlsListSize });
+      const mp4frag = new Mp4Frag({ hlsBase: uniqueName, hlsListSize, hlsListInit: true });
 
       const unsetContext = setContext(this, contextAccess, uniqueName, mp4frag);
 
-      if (httpRoutes === true) {
-        addRoutes(uniqueName, mp4frag);
-      }
+      // do we need to remove routes ?
+      addRoutes(httpRoutes, uniqueName, mp4frag);
 
       const onInitialized = data => {
         // todo this.send({cmd: 'start', type: 'hls', payload: '/uri_to_playlist.m3u8'});
         // todo cmd 'start' to trigger front end video playback to start
         // todo pass uri to playlist.m3u8
+
+        // todo do we need to send full url?
+        // todo refine this message to coordinate with front end video player
+        this.send({ cmd: 'start', type: 'hls', payload: `/${uniqueName}.m3u8` });
 
         this.status({ fill: 'green', shape: 'dot', text: 'initialized' });
       };
