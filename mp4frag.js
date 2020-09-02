@@ -9,7 +9,7 @@ Mp4Frag.prototype.toString = function () {
 
 module.exports = RED => {
   // sets context and returns a function to unset context
-  function setContext(node, contextAccess, uniqueName, mp4frag) {
+  const setContext = (node, contextAccess, uniqueName, mp4frag) => {
     switch (contextAccess) {
       case 'global':
         const globalContext = node.context().global;
@@ -32,7 +32,59 @@ module.exports = RED => {
       default:
         return () => {};
     }
-  }
+  };
+
+  const addRoutes = (uniqueName, mp4frag) => {
+    RED.httpNode.get(`/${uniqueName}.m3u8`, (req, res) => {
+      const m3u8 = mp4frag && mp4frag.m3u8;
+
+      if (!m3u8) {
+        return res.status(404).send('m3u8 playlist not found');
+      }
+
+      res.set('content-type', 'application/vnd.apple.mpegurl');
+
+      res.send(m3u8);
+    });
+
+    RED.httpNode.get(`/${uniqueName}.m3u8.txt`, (req, res) => {
+      const m3u8 = mp4frag && mp4frag.m3u8;
+
+      if (!m3u8) {
+        return res.status(404).send('m3u8 playlist not found');
+      }
+
+      res.set('content-type', 'text/plain');
+
+      res.send(m3u8);
+    });
+
+    RED.httpNode.get(`/init-${uniqueName}.mp4`, (req, res) => {
+      const initialization = mp4frag && mp4frag.initialization;
+
+      if (!initialization) {
+        return res.status(404).send('initialization fragment not found');
+      }
+
+      res.set('content-type', 'video/mp4');
+
+      res.send(initialization);
+    });
+
+    RED.httpNode.get(`/${uniqueName}:seq(\\d+).m4s`, (req, res) => {
+      const { seq } = req.params;
+
+      const segment = mp4frag && mp4frag.getHlsSegment(seq);
+
+      if (!segment) {
+        return res.status(404).send(`segment ${seq} not found`);
+      }
+
+      res.set('content-type', 'video/mp4');
+
+      res.send(segment);
+    });
+  };
 
   function Mp4FragNode(config) {
     RED.nodes.createNode(this, config);
@@ -44,6 +96,10 @@ module.exports = RED => {
       const mp4frag = new Mp4Frag({ hlsBase: uniqueName, hlsListSize });
 
       const unsetContext = setContext(this, contextAccess, uniqueName, mp4frag);
+
+      if (httpRoutes === true) {
+        addRoutes(uniqueName, mp4frag);
+      }
 
       const onInitialized = data => {
         // todo this.send({cmd: 'start', type: 'hls', payload: '/uri_to_playlist.m3u8'});
