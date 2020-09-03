@@ -35,12 +35,22 @@ module.exports = RED => {
   };
 
   const addRoutes = (httpRoutes, uniqueName, mp4frag) => {
-    if (httpRoutes) {
+    if (httpRoutes === true) {
       // define routes early
       const playlistPath = `/${uniqueName}.m3u8`;
+
       const playlistTxtPath = `/${uniqueName}.m3u8.txt`;
+
       const initFragPath = `/init-${uniqueName}.mp4`;
+
       const segmentPath = `/${uniqueName}:seq(\\d+).m4s`;
+
+      console.log({
+        playlistPath,
+        playlistTxtPath,
+        initFragPath,
+        segmentPath,
+      });
 
       RED.httpNode.get(playlistPath, (req, res) => {
         const m3u8 = mp4frag && mp4frag.m3u8;
@@ -115,7 +125,7 @@ module.exports = RED => {
 
         // todo do we need to send full url?
         // todo refine this message to coordinate with front end video player
-        this.send({ cmd: 'start', type: 'hls', payload: `/${uniqueName}.m3u8` });
+        this.send({ topic: 'set_source', payload: `/${uniqueName}.m3u8` });
 
         this.status({ fill: 'green', shape: 'dot', text: 'initialized' });
       };
@@ -141,6 +151,8 @@ module.exports = RED => {
 
           mp4frag.resetCache();
 
+          this.send({ topic: 'set_source', payload: '' });
+
           this.status({ fill: 'green', shape: 'ring', text: 'ready' });
 
           // todo this.send({cmd:'stop') to trigger front end video playback to stop
@@ -151,6 +163,8 @@ module.exports = RED => {
         unsetContext();
 
         mp4frag.resetCache();
+
+        this.send({ topic: 'set_source', payload: '' });
 
         if (removed) {
           mp4frag.off('initialized', onInitialized);
