@@ -5,6 +5,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "pack": "npm pack",
+    "pretty": "prettier --write *.html",
     "lint": "eslint --fix --ext .js --ignore-path .gitignore ."
   },
   "repository": {

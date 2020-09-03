@@ -1,6 +1,6 @@
 <script type="text/javascript">
   RED.nodes.registerType('mp4frag', {
-    align: 'right',
+    align: 'left',
     category: 'cctv',
     color: '#DEBD5C',
     defaults: {
@@ -8,7 +8,7 @@
         value: 'Change_This_Name',
         type: 'str',
         required: true,
-        validate: RED.validators.regex(/^(?:(?!^Change_This_Name$)[a-z_]){3,50}$/i)
+        validate: RED.validators.regex(/^(?:(?!^Change_This_Name$)[a-z_]){3,50}$/i),
       },
       hlsListSize: {
         value: 4,
@@ -16,7 +16,7 @@
         required: true,
         validate: function (hlsListSize) {
           return hlsListSize >= 2 && hlsListSize <= 10;
-        }
+        },
       },
       contextAccess: {
         value: 'none',
@@ -24,7 +24,7 @@
         required: true,
         validate: function (contextAccess) {
           return ['none', 'flow', 'global'].includes(contextAccess);
-        }
+        },
       },
       httpRoutes: {
         value: true,
@@ -32,8 +32,8 @@
         required: true,
         validate: function (httpRoutes) {
           return typeof httpRoutes === 'boolean';
-        }
-      }
+        },
+      },
     },
     icon: 'font-awesome/fa-file-video-o',
     inputLabels: 'buffer',
@@ -42,20 +42,26 @@
       return this.uniqueName || 'mp4frag';
     },
     outputLabels: 'status',
-    outputs: 1
+    outputs: 1,
   });
 </script>
 
 <script data-template-name="mp4frag" type="text/html">
-
   <div class="form-row">
     <label style="width:9rem;" for="node-input-uniqueName"><i class="fa fa-tag"></i> Unique Name</label>
-    <input style="width:auto;min-width:15rem" type="text" id="node-input-uniqueName" placeholder="Unique_Name">
+    <input style="width:auto;min-width:15rem" type="text" id="node-input-uniqueName" placeholder="Unique_Name" />
   </div>
 
   <div class="form-row">
     <label style="width:9rem" for="node-input-hlsListSize"><i class="fa fa-list-ol"></i> HLS List Size</label>
-    <input style="width:auto;min-width:15rem" type="number" id="node-input-hlsListSize" placeholder="4" min="2" max="10">
+    <input
+      style="width:auto;min-width:15rem"
+      type="number"
+      id="node-input-hlsListSize"
+      placeholder="4"
+      min="2"
+      max="10"
+    />
   </div>
 
   <div class="form-row">
@@ -69,9 +75,8 @@
 
   <div class="form-row">
     <label style="width:9rem" for="node-input-httpRoutes"><i class="fa fa-globe"></i> HTTP Routes</label>
-    <input style="width:auto" type="checkbox" id="node-input-httpRoutes">
+    <input style="width:auto" type="checkbox" id="node-input-httpRoutes" />
   </div>
-
 </script>
 
 <script data-help-name="mp4frag" type="text/html">
