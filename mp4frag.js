@@ -34,9 +34,9 @@ module.exports = RED => {
     }
   };
 
+  // adds routes and returns a function to remove routes
   const addRoutes = (httpRoutes, uniqueName, mp4frag) => {
     if (httpRoutes === true) {
-      // define routes early
       const playlistPath = `/${uniqueName}.m3u8`;
 
       const playlistTxtPath = `/${uniqueName}.m3u8.txt`;
@@ -45,12 +45,7 @@ module.exports = RED => {
 
       const segmentPath = `/${uniqueName}:seq(\\d+).m4s`;
 
-      console.log({
-        playlistPath,
-        playlistTxtPath,
-        initFragPath,
-        segmentPath,
-      });
+      const paths = [playlistPath, playlistTxtPath, initFragPath, segmentPath];
 
       RED.httpNode.get(playlistPath, (req, res) => {
         const m3u8 = mp4frag && mp4frag.m3u8;
@@ -101,6 +96,20 @@ module.exports = RED => {
 
         res.send(segment);
       });
+
+      return () => {
+        const { stack } = RED.httpNode._router;
+
+        for (let i = stack.length - 1; i >= 0; --i) {
+          const layer = stack[i];
+
+          if (layer.route && paths.includes(layer.route.path)) {
+            stack.splice(i, 1);
+          }
+        }
+      };
+    } else {
+      return () => {};
     }
   };
 
@@ -115,16 +124,9 @@ module.exports = RED => {
 
       const unsetContext = setContext(this, contextAccess, uniqueName, mp4frag);
 
-      // do we need to remove routes ?
-      addRoutes(httpRoutes, uniqueName, mp4frag);
+      const removeRoutes = addRoutes(httpRoutes, uniqueName, mp4frag);
 
       const onInitialized = data => {
-        // todo this.send({cmd: 'start', type: 'hls', payload: '/uri_to_playlist.m3u8'});
-        // todo cmd 'start' to trigger front end video playback to start
-        // todo pass uri to playlist.m3u8
-
-        // todo do we need to send full url?
-        // todo refine this message to coordinate with front end video player
         this.send({ topic: 'set_source', payload: `/${uniqueName}.m3u8` });
 
         this.status({ fill: 'green', shape: 'dot', text: 'initialized' });
@@ -154,29 +156,29 @@ module.exports = RED => {
           this.send({ topic: 'set_source', payload: '' });
 
           this.status({ fill: 'green', shape: 'ring', text: 'ready' });
-
-          // todo this.send({cmd:'stop') to trigger front end video playback to stop
         }
       };
 
       const onClose = (removed, done) => {
         unsetContext();
 
+        removeRoutes();
+
         mp4frag.resetCache();
+
+        mp4frag.off('initialized', onInitialized);
+
+        mp4frag.off('segment', onSegment);
+
+        mp4frag.off('error', onError);
+
+        this.off('input', onInput);
+
+        this.off('close', onClose);
 
         this.send({ topic: 'set_source', payload: '' });
 
         if (removed) {
-          mp4frag.off('initialized', onInitialized);
-
-          mp4frag.off('segment', onSegment);
-
-          mp4frag.off('error', onError);
-
-          this.off('input', onInput);
-
-          this.off('close', onClose);
-
           this.status({ fill: 'red', shape: 'ring', text: 'removed' });
         } else {
           this.status({ fill: 'red', shape: 'dot', text: 'closed' });
@@ -197,9 +199,9 @@ module.exports = RED => {
 
       this.status({ fill: 'green', shape: 'ring', text: 'ready' });
     } catch (err) {
-      this.status({ fill: 'red', shape: 'dot', text: err.toString() });
-
       this.error(err);
+
+      this.status({ fill: 'red', shape: 'dot', text: err.toString() });
     }
   }
 
