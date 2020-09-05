@@ -8,6 +8,22 @@ Mp4Frag.prototype.toString = function () {
 };
 
 module.exports = RED => {
+  // keep track of unique names
+  const uniqueNames = new Set();
+
+  // adds unique name and returns a function to delete unique name
+  const addUniqueName = uniqueName => {
+    if (uniqueNames.has(uniqueName)) {
+      throw new Error(`${uniqueName} already in use`);
+    }
+
+    uniqueNames.add(uniqueName);
+
+    return () => {
+      uniqueNames.delete(uniqueName);
+    };
+  };
+
   // sets context and returns a function to unset context
   const setContext = (node, contextAccess, uniqueName, mp4frag) => {
     switch (contextAccess) {
@@ -119,6 +135,9 @@ module.exports = RED => {
     const { uniqueName, hlsListSize, contextAccess, httpRoutes } = config;
 
     try {
+      // throws if unique name already exists
+      const deleteUniqueName = addUniqueName(uniqueName);
+
       // mp4frag can throw if given bad hlsBase
       const mp4frag = new Mp4Frag({ hlsBase: uniqueName, hlsListSize, hlsListInit: true });
 
@@ -160,6 +179,8 @@ module.exports = RED => {
       };
 
       const onClose = (removed, done) => {
+        deleteUniqueName();
+
         unsetContext();
 
         removeRoutes();
