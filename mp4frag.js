@@ -156,7 +156,7 @@ module.exports = RED => {
       };
 
       const onError = err => {
-        this.status({ fill: 'red', shape: 'dot', text: err });
+        this.status({ fill: 'red', shape: 'dot', text: err.toString() });
 
         this.error(err);
       };
