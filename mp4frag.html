@@ -4,6 +4,10 @@
     category: 'cctv',
     color: '#DEBD5C',
     defaults: {
+      name: {
+        value: '',
+        type: 'str',
+      },
       uniqueName: {
         value: 'Change_This_Name',
         type: 'str',
@@ -39,7 +43,7 @@
     inputLabels: 'buffer',
     inputs: 1,
     label: function () {
-      return this.uniqueName || 'mp4frag';
+      return this.name || this.uniqueName || 'mp4frag';
     },
     outputLabels: 'status',
     outputs: 1,
@@ -48,8 +52,13 @@
 
 <script data-template-name="mp4frag" type="text/html">
   <div class="form-row">
-    <label style="width:9rem;" for="node-input-uniqueName"><i class="fa fa-tag"></i> Unique Name</label>
-    <input style="width:auto;min-width:15rem" type="text" id="node-input-uniqueName" placeholder="Unique_Name" />
+    <label style="width:9rem;" for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input style="width:auto;min-width:15rem" type="text" id="node-input-name" placeholder="Name" />
+  </div>
+
+  <div class="form-row">
+    <label style="width:9rem;" for="node-input-uniqueName"><i class="fa fa-barcode"></i> Unique Name</label>
+    <input style="width:auto;min-width:15rem" type="text" id="node-input-uniqueName" placeholder="Letters_And_Underscores_Only" />
   </div>
 
   <div class="form-row">
