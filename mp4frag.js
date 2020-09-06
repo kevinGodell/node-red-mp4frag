@@ -19,9 +19,7 @@ module.exports = RED => {
 
     uniqueNames.add(uniqueName);
 
-    return () => {
-      uniqueNames.delete(uniqueName);
-    };
+    return () => uniqueNames.delete(uniqueName);
   };
 
   // sets context and returns a function to unset context
@@ -32,18 +30,14 @@ module.exports = RED => {
 
         globalContext.set(uniqueName, mp4frag);
 
-        return () => {
-          globalContext.set(uniqueName, undefined);
-        };
+        return () => globalContext.set(uniqueName, undefined);
 
       case 'flow':
         const flowContext = node.context().flow;
 
         flowContext.set(uniqueName, mp4frag);
 
-        return () => {
-          flowContext.set(uniqueName, undefined);
-        };
+        return () => flowContext.set(uniqueName, undefined);
 
       default:
         return () => {};
@@ -53,64 +47,67 @@ module.exports = RED => {
   // adds routes and returns a function to remove routes
   const addRoutes = (httpRoutes, uniqueName, mp4frag) => {
     if (httpRoutes === true) {
-      const playlistPath = `/${uniqueName}.m3u8`;
+      const regexp = new RegExp(
+        `^\/mp4frag\/${uniqueName}/(?:(hls.m3u8)|hls([0-9]+).m4s|(init-hls.mp4)|(hls.m3u8.txt))$`,
+        'i'
+      );
 
-      const playlistTxtPath = `/${uniqueName}.m3u8.txt`;
-
-      const initFragPath = `/init-${uniqueName}.mp4`;
-
-      const segmentPath = `/${uniqueName}:seq(\\d+).m4s`;
-
-      const paths = [playlistPath, playlistTxtPath, initFragPath, segmentPath];
-
-      RED.httpNode.get(playlistPath, (req, res) => {
-        const m3u8 = mp4frag && mp4frag.m3u8;
-
-        if (!m3u8) {
-          return res.status(404).send('m3u8 playlist not found');
+      RED.httpNode.get(regexp, (req, res) => {
+        if (!mp4frag) {
+          return res.status(404).send(`${uniqueName} mp4frag not found`);
         }
 
-        res.set('content-type', 'application/vnd.apple.mpegurl');
+        const { params } = req;
 
-        res.send(m3u8);
-      });
+        if (params[0]) {
+          const { m3u8 } = mp4frag;
 
-      RED.httpNode.get(playlistTxtPath, (req, res) => {
-        const m3u8 = mp4frag && mp4frag.m3u8;
+          if (m3u8) {
+            res.set('content-type', 'application/vnd.apple.mpegurl');
 
-        if (!m3u8) {
-          return res.status(404).send('m3u8 playlist not found');
+            return res.send(m3u8);
+          }
+
+          return res.status(404).send(`${uniqueName} m3u8 playlist not found`);
         }
 
-        res.set('content-type', 'text/plain');
+        if (params[1]) {
+          const sequence = params[1];
 
-        res.send(m3u8);
-      });
+          const segment = mp4frag.getHlsSegment(sequence);
 
-      RED.httpNode.get(initFragPath, (req, res) => {
-        const initialization = mp4frag && mp4frag.initialization;
+          if (segment) {
+            res.set('content-type', 'video/mp4');
 
-        if (!initialization) {
-          return res.status(404).send('initialization fragment not found');
+            return res.send(segment);
+          }
+
+          return res.status(404).send(`${uniqueName} segment ${sequence} not found`);
         }
 
-        res.set('content-type', 'video/mp4');
+        if (params[2]) {
+          const { initialization } = mp4frag;
 
-        res.send(initialization);
-      });
+          if (initialization) {
+            res.set('content-type', 'video/mp4');
 
-      RED.httpNode.get(segmentPath, (req, res) => {
-        const { seq } = req.params;
+            return res.send(initialization);
+          }
 
-        const segment = mp4frag && mp4frag.getHlsSegment(seq);
-
-        if (!segment) {
-          return res.status(404).send(`segment ${seq} not found`);
+          return res.status(404).send(`${uniqueName} initialization fragment not found`);
         }
 
-        res.set('content-type', 'video/mp4');
+        if (params[3]) {
+          const { m3u8 } = mp4frag;
 
-        res.send(segment);
+          if (m3u8) {
+            res.set('content-type', 'text/plain');
+
+            return res.send(m3u8);
+          }
+
+          return res.status(404).send(`${uniqueName} m3u8 playlist not found`);
+        }
       });
 
       return () => {
@@ -119,14 +116,16 @@ module.exports = RED => {
         for (let i = stack.length - 1; i >= 0; --i) {
           const layer = stack[i];
 
-          if (layer.route && paths.includes(layer.route.path)) {
+          if (layer.route && layer.route.path === regexp) {
             stack.splice(i, 1);
+
+            break;
           }
         }
       };
-    } else {
-      return () => {};
     }
+
+    return () => {};
   };
 
   function Mp4FragNode(config) {
@@ -139,14 +138,14 @@ module.exports = RED => {
       const deleteUniqueName = addUniqueName(uniqueName);
 
       // mp4frag can throw if given bad hlsBase
-      const mp4frag = new Mp4Frag({ hlsBase: uniqueName, hlsListSize, hlsListInit: true });
+      const mp4frag = new Mp4Frag({ hlsBase: 'hls', hlsListSize, hlsListInit: true });
 
       const unsetContext = setContext(this, contextAccess, uniqueName, mp4frag);
 
       const removeRoutes = addRoutes(httpRoutes, uniqueName, mp4frag);
 
       const onInitialized = data => {
-        this.send({ topic: 'set_source', payload: `/${uniqueName}.m3u8` });
+        this.send({ topic: 'set_source', payload: `/mp4frag/${uniqueName}/hls.m3u8` });
 
         this.status({ fill: 'green', shape: 'dot', text: 'initialized' });
       };
