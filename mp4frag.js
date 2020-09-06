@@ -156,26 +156,35 @@ module.exports = RED => {
       };
 
       const onError = err => {
-        this.status({ fill: 'red', shape: 'dot', text: err.toString() });
-
         this.error(err);
+
+        this.status({ fill: 'red', shape: 'dot', text: err.toString() });
       };
 
       const onInput = msg => {
         const { payload } = msg;
 
         if (Buffer.isBuffer(payload) === true) {
-          mp4frag.write(payload);
-        } else {
-          // receiving anything else will signal us to clear mp4frag cache
-          // todo maybe handle input msgs
+          return mp4frag.write(payload);
+        }
 
+        const { code, signal } = payload;
+
+        // current method for resetting cache
+        // grab exit code or signal from exec
+        // cant just check (!code) because it could be 0 ???
+        if (code !== undefined || signal !== undefined) {
           mp4frag.resetCache();
 
           this.send({ topic: 'set_source', payload: '' });
 
-          this.status({ fill: 'green', shape: 'ring', text: 'ready' });
+          return this.status({ fill: 'green', shape: 'ring', text: 'reset' });
         }
+
+        // temporarily log unknown payload as error for debugging
+        this.error(payload);
+
+        this.status({ fill: 'red', shape: 'dot', text: `unknown payload ${payload}` });
       };
 
       const onClose = (removed, done) => {
