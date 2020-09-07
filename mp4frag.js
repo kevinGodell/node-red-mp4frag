@@ -2,6 +2,8 @@
 
 const Mp4Frag = require('mp4frag');
 
+const { delayNext } = require('api-delay');
+
 // format data for context data menu
 Mp4Frag.prototype.toString = function () {
   return `Mp4Frag({ hlsBase: '${this._hlsBase}', hlsListSize: ${this._hlsListSize} })`;
@@ -148,13 +150,9 @@ module.exports = RED => {
 
   // todo npmjs api-delay
 
-  RED.httpAdmin.get('/mp4frag/:nodeid/uniquenames', (req, res) => {
+  RED.httpAdmin.get('/mp4frag/:nodeid/uniquenames', delayNext({ time: 3000 }), (req, res) => {
     const id = req.params.nodeid;
-    // res.send(id);
-    setTimeout(() => {
-      console.log('time to send the delayed response');
-      res.send(id);
-    }, 2000);
+    res.send(id);
   });
 
   function Mp4FragNode(config) {
