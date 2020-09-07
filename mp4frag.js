@@ -13,13 +13,17 @@ module.exports = RED => {
 
   // adds unique name and returns a function to delete unique name
   const addUniqueName = uniqueName => {
-    if (uniqueNames.has(uniqueName)) {
-      throw new Error(`${uniqueName} already in use`);
+    if (uniqueName) {
+      if (uniqueNames.has(uniqueName)) {
+        throw new Error(`${uniqueName} already in use`);
+      }
+
+      uniqueNames.add(uniqueName);
+
+      return () => uniqueNames.delete(uniqueName);
     }
 
-    uniqueNames.add(uniqueName);
-
-    return () => uniqueNames.delete(uniqueName);
+    return () => {};
   };
 
   // sets context and returns a function to unset context
@@ -45,12 +49,22 @@ module.exports = RED => {
   };
 
   // adds routes and returns a function to remove routes
-  const addRoutes = (httpRoutes, uniqueName, mp4frag) => {
+  const addRoutes = (node, uniqueName, httpRoutes, routesStructure, mp4frag) => {
     if (httpRoutes === true) {
-      const regexp = new RegExp(
-        `^\/mp4frag\/${uniqueName}/(?:(hls.m3u8)|hls([0-9]+).m4s|(init-hls.mp4)|(hls.m3u8.txt))$`,
-        'i'
-      );
+      let pattern;
+
+      if (routesStructure === 'id_path') {
+        pattern = `^\/mp4frag\/${node.id}/(?:(hls.m3u8)|hls([0-9]+).m4s|(init-hls.mp4)|(hls.m3u8.txt))$`;
+      } else if (routesStructure === 'unique_path') {
+        /* if (RED.validators.regex(/^(?:(?!^Change_This_Name$)[a-z_]){3,50}$/i)(uniqueName) === false) {
+          throw new Error(`invalid unique name ${uniqueName}`);
+        }*/
+        pattern = `^\/mp4frag\/${uniqueName}/(?:(hls.m3u8)|hls([0-9]+).m4s|(init-hls.mp4)|(hls.m3u8.txt))$`;
+      } else {
+        throw new Error(`invalid routes structure ${routesStructure}`);
+      }
+
+      const regexp = new RegExp(pattern, 'i');
 
       RED.httpNode.get(regexp, (req, res) => {
         if (!mp4frag) {
@@ -131,7 +145,7 @@ module.exports = RED => {
   function Mp4FragNode(config) {
     RED.nodes.createNode(this, config);
 
-    const { uniqueName, hlsListSize, contextAccess, httpRoutes } = config;
+    const { uniqueName, hlsListSize, contextAccess, httpRoutes, routesStructure } = config;
 
     try {
       // throws if unique name already exists
@@ -142,10 +156,16 @@ module.exports = RED => {
 
       const unsetContext = setContext(this, contextAccess, uniqueName, mp4frag);
 
-      const removeRoutes = addRoutes(httpRoutes, uniqueName, mp4frag);
+      // throws if uniqueName is invalid while choosing routesStructure unique_path
+      const removeRoutes = addRoutes(this, uniqueName, httpRoutes, routesStructure, mp4frag);
+
+      const playlist =
+        routesStructure === 'id_path' ? `/mp4frag/${this.id}/hls.m3u8` : `/mp4frag/${uniqueName}/hls.m3u8`;
 
       const onInitialized = data => {
-        this.send({ topic: 'set_source', payload: `/mp4frag/${uniqueName}/hls.m3u8` });
+        console.log({ playlist });
+
+        this.send({ topic: 'set_source', payload: playlist });
 
         this.status({ fill: 'green', shape: 'dot', text: 'initialized' });
       };
