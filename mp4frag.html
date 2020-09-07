@@ -1,18 +1,33 @@
 <script type="text/javascript">
   // first grabs values from form, then from node
   const getAllValues = node => {
-    const id = node.id;
-    const uniqueNameElem = $('#node-input-uniqueName');
-    const contextAccessElem = $('#node-input-contextAccess');
-    const httpRoutesElem = $('#node-input-httpRoutes');
-    const routesStructureElem = $('#node-input-routesStructure');
-    const uniqueName = uniqueNameElem.length ? uniqueNameElem.val() : node.uniqueName;
-    const contextAccess = contextAccessElem.length ? contextAccessElem.val() : node.contextAccess;
-    const httpRoutes = httpRoutesElem.length ? httpRoutesElem.is(':checked') : node.httpRoutes;
-    const routesStructure = routesStructureElem.length ? routesStructureElem.val() : node.routesStructure;
+    const hlsListSize = () => {
+      const hlsListSizeElem = $('#node-input-hlsListSize');
+      return hlsListSizeElem.length ? hlsListSizeElem.val() : node.hlsListSize;
+    };
+
+    const uniqueName = () => {
+      const uniqueNameElem = $('#node-input-uniqueName');
+      return uniqueNameElem.length ? uniqueNameElem.val() : node.uniqueName;
+    };
+
+    const contextAccess = () => {
+      const contextAccessElem = $('#node-input-contextAccess');
+      return contextAccessElem.length ? contextAccessElem.val() : node.contextAccess;
+    };
+
+    const httpRoutes = () => {
+      const httpRoutesElem = $('#node-input-httpRoutes');
+      return httpRoutesElem.length ? httpRoutesElem.is(':checked') : node.httpRoutes;
+    };
+
+    const routesStructure = () => {
+      const routesStructureElem = $('#node-input-routesStructure');
+      return routesStructureElem.length ? routesStructureElem.val() : node.routesStructure;
+    };
 
     return {
-      id,
+      hlsListSize,
       uniqueName,
       contextAccess,
       httpRoutes,
@@ -41,9 +56,8 @@
         required: false,
         validate: function (uniqueName) {
           const { contextAccess, httpRoutes, routesStructure } = getAllValues(this);
-          //buildUrlToPlaylist(this);
           return (
-            (contextAccess === 'none' && (httpRoutes === false || routesStructure === 'id_path')) ||
+            (contextAccess() === 'none' && (httpRoutes() === false || routesStructure() === 'id_path')) ||
             RED.validators.regex(/^(?:(?!^Change_This_Name$)[a-z_]){3,50}$/i)(uniqueName)
           );
         },
@@ -52,26 +66,26 @@
         value: 'none',
         required: true,
         validate: function (contextAccess) {
-          console.log('validate context', contextAccess);
           return ['none', 'flow', 'global'].includes(contextAccess);
         },
       },
       httpRoutes: {
         value: true,
         required: true,
-        validate: function (v) {
+        validate: function (/*sometimes returns checkbox value, not its checked property*/) {
           //checkbox always returns value, not if whether checked
           const { httpRoutes } = getAllValues(this);
+          const httpRoutesBool = httpRoutes();
           const routesStructure = $('#routesStructure');
           const playlistTip = $('#playlistTip');
-          if (httpRoutes === true) {
+          if (httpRoutesBool === true) {
             routesStructure.show();
             playlistTip.show();
           } else {
             routesStructure.hide();
             playlistTip.hide();
           }
-          return typeof httpRoutes === 'boolean';
+          return typeof httpRoutesBool === 'boolean';
         },
       },
       routesStructure: {
@@ -79,14 +93,15 @@
         required: false,
         validate: function (routesStructure) {
           let url = '';
-          const { id, uniqueName } = getAllValues(this);
+          const { uniqueName } = getAllValues(this);
+          const uniqueNameStr = uniqueName();
           if (routesStructure === 'id_path') {
-            url = `/mp4frag/${id}/hls.m3u8`;
+            url = `/mp4frag/${this.id}/hls.m3u8`;
           } else if (
             routesStructure === 'unique_path' &&
-            RED.validators.regex(/^(?:(?!^Change_This_Name$)[a-z_]){3,50}$/i)(uniqueName)
+            RED.validators.regex(/^(?:(?!^Change_This_Name$)[a-z_]){3,50}$/i)(uniqueNameStr)
           ) {
-            url = `/mp4frag/${uniqueName}/hls.m3u8`;
+            url = `/mp4frag/${uniqueNameStr}/hls.m3u8`;
           }
           $('code#playlistCode').text(url);
           return ['unique_path', 'id_path'].includes(routesStructure);
@@ -101,8 +116,7 @@
     },
     outputLabels: 'status',
     outputs: 1,
-    oneditprepare: function () {
-    },
+    oneditprepare: function () {},
   });
 </script>
 
