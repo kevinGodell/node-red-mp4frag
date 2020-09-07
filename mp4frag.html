@@ -1,38 +1,51 @@
 <script type="text/javascript">
-  // first grabs values from form, then from node
-  const getAllValues = node => {
-    const hlsListSize = () => {
-      const hlsListSizeElem = $('#node-input-hlsListSize');
-      return hlsListSizeElem.length ? hlsListSizeElem.val() : node.hlsListSize;
-    };
+  /*
+   helper functions for validations
+   first try to grab values from elem (validation cycle)
+   grab values from node if elem not found (page load)
+   */
+  const hlsListSize = () => {
+    const hlsListSizeElem = $('#node-input-hlsListSize');
+    return hlsListSizeElem.length ? hlsListSizeElem.val() : node.hlsListSize;
+  };
 
-    const uniqueName = () => {
-      const uniqueNameElem = $('#node-input-uniqueName');
-      return uniqueNameElem.length ? uniqueNameElem.val() : node.uniqueName;
-    };
+  const uniqueName = () => {
+    const uniqueNameElem = $('#node-input-uniqueName');
+    return uniqueNameElem.length ? uniqueNameElem.val() : node.uniqueName;
+  };
 
-    const contextAccess = () => {
-      const contextAccessElem = $('#node-input-contextAccess');
-      return contextAccessElem.length ? contextAccessElem.val() : node.contextAccess;
-    };
+  const contextAccess = () => {
+    const contextAccessElem = $('#node-input-contextAccess');
+    return contextAccessElem.length ? contextAccessElem.val() : node.contextAccess;
+  };
 
-    const httpRoutes = () => {
-      const httpRoutesElem = $('#node-input-httpRoutes');
-      return httpRoutesElem.length ? httpRoutesElem.is(':checked') : node.httpRoutes;
-    };
+  const httpRoutes = () => {
+    const httpRoutesElem = $('#node-input-httpRoutes');
+    return httpRoutesElem.length ? httpRoutesElem.is(':checked') : node.httpRoutes;
+  };
 
-    const routesStructure = () => {
-      const routesStructureElem = $('#node-input-routesStructure');
-      return routesStructureElem.length ? routesStructureElem.val() : node.routesStructure;
-    };
+  const routesStructure = () => {
+    const routesStructureElem = $('#node-input-routesStructure');
+    return routesStructureElem.length ? routesStructureElem.val() : node.routesStructure;
+  };
 
-    return {
-      hlsListSize,
-      uniqueName,
-      contextAccess,
-      httpRoutes,
-      routesStructure,
-    };
+  const updatePlaylist = str => {
+    const playlist = $('code#playlist');
+    if (playlist.length) {
+      playlist.text(str);
+    }
+  };
+
+  const httpRoutesToggle = bool => {
+    const routesStructure = $('#routesStructure');
+    const playlistTip = $('#playlistTip');
+    if (bool === true) {
+      routesStructure.show();
+      playlistTip.show();
+    } else {
+      routesStructure.hide();
+      playlistTip.hide();
+    }
   };
 
   RED.nodes.registerType('mp4frag', {
@@ -55,7 +68,6 @@
         value: '',
         required: false,
         validate: function (uniqueName) {
-          const { contextAccess, httpRoutes, routesStructure } = getAllValues(this);
           return (
             (contextAccess() === 'none' && (httpRoutes() === false || routesStructure() === 'id_path')) ||
             RED.validators.regex(/^(?:(?!^Change_This_Name$)[a-z_]){3,50}$/i)(uniqueName)
@@ -72,19 +84,9 @@
       httpRoutes: {
         value: true,
         required: true,
-        validate: function (/*sometimes returns checkbox value, not its checked property*/) {
-          //checkbox always returns value, not if whether checked
-          const { httpRoutes } = getAllValues(this);
+        validate: function (/*checkbox does not return if checked*/) {
           const httpRoutesBool = httpRoutes();
-          const routesStructure = $('#routesStructure');
-          const playlistTip = $('#playlistTip');
-          if (httpRoutesBool === true) {
-            routesStructure.show();
-            playlistTip.show();
-          } else {
-            routesStructure.hide();
-            playlistTip.hide();
-          }
+          httpRoutesToggle(httpRoutesBool);
           return typeof httpRoutesBool === 'boolean';
         },
       },
@@ -92,8 +94,7 @@
         value: 'id_path',
         required: false,
         validate: function (routesStructure) {
-          let url = '';
-          const { uniqueName } = getAllValues(this);
+          let url;
           const uniqueNameStr = uniqueName();
           if (routesStructure === 'id_path') {
             url = `/mp4frag/${this.id}/hls.m3u8`;
@@ -102,8 +103,10 @@
             RED.validators.regex(/^(?:(?!^Change_This_Name$)[a-z_]){3,50}$/i)(uniqueNameStr)
           ) {
             url = `/mp4frag/${uniqueNameStr}/hls.m3u8`;
+          } else {
+            url = 'invalid data';
           }
-          $('code#playlistCode').text(url);
+          updatePlaylist(url);
           return ['unique_path', 'id_path'].includes(routesStructure);
         },
       },
@@ -171,7 +174,7 @@
   </div>
 
   <div class="form-tips " id="playlistTip">
-    <code style="text-align: center" id="playlistCode"></code>
+    <code style="display: block; text-align: center" id="playlist"></code>
   </div>
 </script>
 
