@@ -30,7 +30,7 @@
   };
 
   const updatePlaylist = str => {
-    const playlist = $('code#playlist');
+    const playlist = $('#playlist');
     if (playlist.length) {
       playlist.text(str);
     }
@@ -38,13 +38,13 @@
 
   const httpRoutesToggle = bool => {
     const routesStructure = $('#routesStructure');
-    const playlistTip = $('#playlistTip');
+    //const playlistTip = $('#playlistTip');
     if (bool === true) {
       routesStructure.show();
-      playlistTip.show();
+      //playlistTip.show();
     } else {
       routesStructure.hide();
-      playlistTip.hide();
+      //playlistTip.hide();
     }
   };
 
@@ -171,10 +171,9 @@
       <option value="id_path" id="idPath">/mp4frag/{nodeID}/hls.m3u8</option>
       <option value="unique_path" id="uniquePath">/mp4frag/{uniqueName}/hls.m3u8</option>
     </select>
-  </div>
-
-  <div class="form-tips " id="playlistTip">
-    <code style="display: block; text-align: center" id="playlist"></code>
+    <div class="form-tips" style="margin-top:5px">
+      <code style="display:block;text-align:center" id="playlist"></code>
+    </div>
   </div>
 </script>
 
