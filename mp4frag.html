@@ -4,47 +4,49 @@
    first try to grab values from elem (validation cycle)
    grab values from node if elem not found (page load)
    */
-  const hlsListSize = () => {
+  const uniqueNameRegex = RED.validators.regex(/^(?:(?!^Change_This_Name$)[a-z_]){3,50}$/i);
+
+  const hlsListSize = node => {
     const hlsListSizeElem = $('#node-input-hlsListSize');
     return hlsListSizeElem.length ? hlsListSizeElem.val() : node.hlsListSize;
   };
 
-  const uniqueName = () => {
+  const uniqueName = node => {
     const uniqueNameElem = $('#node-input-uniqueName');
     return uniqueNameElem.length ? uniqueNameElem.val() : node.uniqueName;
   };
 
-  const contextAccess = () => {
+  const contextAccess = node => {
     const contextAccessElem = $('#node-input-contextAccess');
     return contextAccessElem.length ? contextAccessElem.val() : node.contextAccess;
   };
 
-  const httpRoutes = () => {
+  const httpRoutes = node => {
     const httpRoutesElem = $('#node-input-httpRoutes');
     return httpRoutesElem.length ? httpRoutesElem.is(':checked') : node.httpRoutes;
   };
 
-  const routesStructure = () => {
+  const routesStructure = node => {
     const routesStructureElem = $('#node-input-routesStructure');
     return routesStructureElem.length ? routesStructureElem.val() : node.routesStructure;
   };
 
-  const updatePlaylist = str => {
-    const playlist = $('#playlist');
-    if (playlist.length) {
-      playlist.text(str);
-    }
-  };
-
   const httpRoutesToggle = bool => {
     const routesStructure = $('#routesStructure');
-    //const playlistTip = $('#playlistTip');
-    if (bool === true) {
-      routesStructure.show();
-      //playlistTip.show();
-    } else {
-      routesStructure.hide();
-      //playlistTip.hide();
+    routesStructure.length && bool === true ? routesStructure.show() : routesStructure.hide();
+  };
+
+  const updatePlaylist = (node, routesStructure) => {
+    const playlist = $('#playlist');
+    if (playlist.length) {
+      if (routesStructure === 'id_path') {
+        return playlist.text(`/mp4frag/${node.id}/hls.m3u8`);
+      }
+      const uniqueNameStr = uniqueName(node);
+      if (routesStructure === 'unique_path' && uniqueNameRegex(uniqueNameStr)) {
+        return playlist.text(`/mp4frag/${uniqueNameStr}/hls.m3u8`);
+      }
+      return playlist.text('invalid data');
     }
   };
 
@@ -60,7 +62,7 @@
       hlsListSize: {
         value: 4,
         required: true,
-        validate: function (hlsListSize) {
+        validate: async function (hlsListSize) {
           return hlsListSize >= 2 && hlsListSize <= 10;
         },
       },
@@ -69,8 +71,8 @@
         required: false,
         validate: function (uniqueName) {
           return (
-            (contextAccess() === 'none' && (httpRoutes() === false || routesStructure() === 'id_path')) ||
-            RED.validators.regex(/^(?:(?!^Change_This_Name$)[a-z_]){3,50}$/i)(uniqueName)
+            (contextAccess(this) === 'none' && (httpRoutes(this) === false || routesStructure(this) === 'id_path')) ||
+            uniqueNameRegex(uniqueName)
           );
         },
       },
@@ -85,7 +87,7 @@
         value: true,
         required: true,
         validate: function (/*checkbox does not return if checked*/) {
-          const httpRoutesBool = httpRoutes();
+          const httpRoutesBool = httpRoutes(this);
           httpRoutesToggle(httpRoutesBool);
           return typeof httpRoutesBool === 'boolean';
         },
@@ -94,19 +96,7 @@
         value: 'id_path',
         required: false,
         validate: function (routesStructure) {
-          let url;
-          const uniqueNameStr = uniqueName();
-          if (routesStructure === 'id_path') {
-            url = `/mp4frag/${this.id}/hls.m3u8`;
-          } else if (
-            routesStructure === 'unique_path' &&
-            RED.validators.regex(/^(?:(?!^Change_This_Name$)[a-z_]){3,50}$/i)(uniqueNameStr)
-          ) {
-            url = `/mp4frag/${uniqueNameStr}/hls.m3u8`;
-          } else {
-            url = 'invalid data';
-          }
-          updatePlaylist(url);
+          updatePlaylist(this, routesStructure);
           return ['unique_path', 'id_path'].includes(routesStructure);
         },
       },
@@ -119,7 +109,28 @@
     },
     outputLabels: 'status',
     outputs: 1,
-    oneditprepare: function () {},
+    oneditprepare: function () {
+      let xhr;
+      const id = this.id;
+      const uniqueName = $('#node-input-uniqueName');
+      uniqueName.on('input', function () {
+        if (xhr && xhr.readyState !== 4) {
+          console.log('aborted request');
+          xhr.abort();
+          xhr = undefined;
+        }
+        xhr = $.ajax({
+          type: 'GET',
+          url: `/mp4frag/${id}/uniquenames`,
+          //data: "name=kevin&location=chicago",
+          success: function (msg) {
+            console.log('Data Saved: ' + msg);
+            console.log(xhr.readyState);
+            xhr = undefined;
+          },
+        });
+      });
+    },
   });
 </script>
 

@@ -11,8 +11,12 @@ module.exports = RED => {
   // keep track of unique names
   const uniqueNames = new Set();
 
+  // todo map uniquename and nodeid
+
   // adds unique name and returns a function to delete unique name
   const addUniqueName = uniqueName => {
+    console.log({ uniqueName });
+
     if (uniqueName) {
       if (uniqueNames.has(uniqueName)) {
         throw new Error(`${uniqueName} already in use`);
@@ -141,6 +145,17 @@ module.exports = RED => {
 
     return () => {};
   };
+
+  // todo npmjs api-delay
+
+  RED.httpAdmin.get('/mp4frag/:nodeid/uniquenames', (req, res) => {
+    const id = req.params.nodeid;
+    // res.send(id);
+    setTimeout(() => {
+      console.log('time to send the delayed response');
+      res.send(id);
+    }, 2000);
+  });
 
   function Mp4FragNode(config) {
     RED.nodes.createNode(this, config);
