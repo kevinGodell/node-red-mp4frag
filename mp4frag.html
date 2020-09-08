@@ -1,9 +1,9 @@
 <script type="text/javascript">
   /*
-   helper functions for validations
-   first try to grab values from elem (validation cycle)
-   grab values from node if elem not found (page load)
+   globally scoped vars and funcs in admin screen?
+   or is scoped to only our nodes?
    */
+
   const uniqueNameRegex = RED.validators.regex(/^(?:(?!^Change_This_Name$)[a-z_]){3,50}$/i);
 
   const hlsListSize = node => {
@@ -50,6 +50,21 @@
     }
   };
 
+  // checks if other node already using uniqueName
+  const uniqueNameExists = (id, uniqueName) => {
+    let exists = false;
+    RED.nodes.eachNode(function (node) {
+      if (node.type === 'mp4frag' && node.id !== id && node.uniqueName === uniqueName) {
+        exists = true;
+      }
+    });
+    return exists;
+  };
+
+  /*
+    register node
+   */
+
   RED.nodes.registerType('mp4frag', {
     align: 'left',
     category: 'cctv',
@@ -70,12 +85,14 @@
         value: '',
         required: false,
         validate: function (uniqueName) {
-          return (
-            (contextAccess(this) === 'none' &&
-              (httpRoutes(this) === false || routesStructure(this) === 'id_path') &&
-              !uniqueName) ||
-            uniqueNameRegex(uniqueName)
-          );
+          if (
+            contextAccess(this) === 'none' &&
+            (httpRoutes(this) === false || routesStructure(this) === 'id_path') &&
+            !uniqueName
+          ) {
+            return true;
+          }
+          return uniqueNameRegex(uniqueName) === true && uniqueNameExists(this.id, uniqueName) === false;
         },
       },
       contextAccess: {
@@ -112,28 +129,16 @@
     outputLabels: 'status',
     outputs: 1,
     oneditprepare: function () {
-      let xhr;
-      const node = this;
-      const id = this.id;
+      // auto remove forbidden characters
       const uniqueName = $('#node-input-uniqueName');
-      uniqueName.on('input', function () {
-        if (xhr && xhr.readyState !== 4) {
-          xhr.abort();
-          xhr = undefined;
-        }
-        const val = this.value;
-        xhr = $.ajax({
-          type: 'GET',
-          url: `/mp4frag/admin`,
-          data: `action=unique_name&id=${id}&val=${val}`,
-          success: function (msg) {
-            if (msg !== 'ok') {
-              RED.notify(`${val} already in use`, 'error');
-            }
-            xhr = undefined;
-          },
+      if (uniqueName.length) {
+        uniqueName.on('input', function () {
+          const newVal = this.value.replace(/[^a-z_]/gi, '');
+          if (this.value !== newVal) {
+            this.value = newVal;
+          }
         });
-      });
+      }
     },
   });
 </script>

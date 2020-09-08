@@ -16,8 +16,8 @@ module.exports = RED => {
   const uniqueNameRegex = /^(?:(?!^Change_This_Name$)[a-z_]){3,50}$/i;
 
   // adds unique name and returns a function to delete unique name
-  const addUniqueName = (uniqueName, id) => {
-    if (uniqueName && id) {
+  const setUniqueName = (uniqueName, id) => {
+    if (uniqueName) {
       if (uniqueNameRegex.test(uniqueName) === false) {
         throw new Error(`invalid unique name ${uniqueName}`);
       }
@@ -38,6 +38,10 @@ module.exports = RED => {
 
   // sets context and returns a function to unset context
   const setContext = (context, contextAccess, uniqueName, mp4frag) => {
+    if (contextAccess !== 'none' && !uniqueName) {
+      throw new Error(`unique name needed for ${contextAccess} context`);
+    }
+
     switch (contextAccess) {
       case 'global':
         const globalContext = context.global;
@@ -127,7 +131,7 @@ module.exports = RED => {
             return res.send(m3u8);
           }
 
-          return res.status(404).send(`${uniqueName} m3u8 playlist not found`);
+          return res.status(404).send(`${uniqueName} m3u8.txt playlist not found`);
         }
       });
 
@@ -149,44 +153,25 @@ module.exports = RED => {
     return () => {};
   };
 
-  RED.httpAdmin.get('/mp4frag/admin', delayNext({ time: 200 }), (req, res) => {
-    const { action } = req.query;
-
-    switch (action) {
-      case 'unique_name':
-        const { id, val } = req.query;
-
-        const item = uniqueNames.get(val);
-
-        if (item === undefined || item === id) {
-          // item does not exists, or already registered to our id
-
-          return res.send('ok');
-        }
-
-        return res.send('err');
-
-      default:
-        return res.send(`unknown action ${action}`);
-    }
-  });
-
   function Mp4FragNode(config) {
     RED.nodes.createNode(this, config);
 
     const { uniqueName, hlsListSize, contextAccess, httpRoutes, routesStructure } = config;
 
+    let mp4frag;
+
     try {
       // mp4frag can throw if given bad hlsBase
-      const mp4frag = new Mp4Frag({ hlsBase: 'hls', hlsListSize, hlsListInit: true });
+      mp4frag = new Mp4Frag({ hlsBase: 'hls', hlsListSize, hlsListInit: true });
 
-      // throws if unique name already exists
-      const deleteUniqueName = addUniqueName(uniqueName, this.id);
+      // throws if uniqueName already exists
+      const deleteUniqueName = setUniqueName(uniqueName, this.id);
 
-      const unsetContext = setContext(this.context(), contextAccess, uniqueName, mp4frag);
-
-      // throws if uniqueName is invalid while choosing routesStructure unique_path
+      // throws if uniqueName not set while choosing routesStructure unique_path
       const removeRoutes = addRoutes(this.id, uniqueName, httpRoutes, routesStructure, mp4frag);
+
+      // throws if uniqueName not set while choosing contextAccess flow or global
+      const unsetContext = setContext(this.context(), contextAccess, uniqueName, mp4frag);
 
       const playlist =
         routesStructure === 'id_path' ? `/mp4frag/${this.id}/hls.m3u8` : `/mp4frag/${uniqueName}/hls.m3u8`;
@@ -275,6 +260,8 @@ module.exports = RED => {
 
       this.status({ fill: 'green', shape: 'ring', text: 'ready' });
     } catch (err) {
+      mp4frag && mp4frag.resetCache();
+
       this.error(err);
 
       this.status({ fill: 'red', shape: 'dot', text: err.toString() });
