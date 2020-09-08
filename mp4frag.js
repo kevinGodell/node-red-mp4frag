@@ -2,8 +2,6 @@
 
 const Mp4Frag = require('mp4frag');
 
-const { delayNext } = require('api-delay');
-
 // format data for context data menu
 Mp4Frag.prototype.toString = function () {
   return `Mp4Frag({ hlsBase: '${this._hlsBase}', hlsListSize: ${this._hlsListSize} })`;
