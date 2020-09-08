@@ -71,7 +71,9 @@
         required: false,
         validate: function (uniqueName) {
           return (
-            (contextAccess(this) === 'none' && (httpRoutes(this) === false || routesStructure(this) === 'id_path')) ||
+            (contextAccess(this) === 'none' &&
+              (httpRoutes(this) === false || routesStructure(this) === 'id_path') &&
+              !uniqueName) ||
             uniqueNameRegex(uniqueName)
           );
         },
@@ -111,21 +113,23 @@
     outputs: 1,
     oneditprepare: function () {
       let xhr;
+      const node = this;
       const id = this.id;
       const uniqueName = $('#node-input-uniqueName');
       uniqueName.on('input', function () {
         if (xhr && xhr.readyState !== 4) {
-          console.log('aborted request');
           xhr.abort();
           xhr = undefined;
         }
+        const val = this.value;
         xhr = $.ajax({
           type: 'GET',
-          url: `/mp4frag/${id}/uniquenames`,
-          //data: "name=kevin&location=chicago",
+          url: `/mp4frag/admin`,
+          data: `action=unique_name&id=${id}&val=${val}`,
           success: function (msg) {
-            console.log('Data Saved: ' + msg);
-            console.log(xhr.readyState);
+            if (msg !== 'ok') {
+              RED.notify(`${val} already in use`, 'error');
+            }
             xhr = undefined;
           },
         });
