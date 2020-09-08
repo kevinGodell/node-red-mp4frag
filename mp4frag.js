@@ -40,14 +40,14 @@ module.exports = RED => {
   const setContext = (context, contextAccess, uniqueName, mp4frag) => {
     switch (contextAccess) {
       case 'global':
-        const globalContext = context().global;
+        const globalContext = context.global;
 
         globalContext.set(uniqueName, mp4frag);
 
         return () => globalContext.set(uniqueName, undefined);
 
       case 'flow':
-        const flowContext = context().flow;
+        const flowContext = context.flow;
 
         flowContext.set(uniqueName, mp4frag);
 
@@ -183,7 +183,7 @@ module.exports = RED => {
       // throws if unique name already exists
       const deleteUniqueName = addUniqueName(uniqueName, this.id);
 
-      const unsetContext = setContext(this.context, contextAccess, uniqueName, mp4frag);
+      const unsetContext = setContext(this.context(), contextAccess, uniqueName, mp4frag);
 
       // throws if uniqueName is invalid while choosing routesStructure unique_path
       const removeRoutes = addRoutes(this.id, uniqueName, httpRoutes, routesStructure, mp4frag);
