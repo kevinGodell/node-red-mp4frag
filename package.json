@@ -29,7 +29,6 @@
   },
   "homepage": "https://github.com/kevinGodell/node-red-contrib-mp4frag#readme",
   "dependencies": {
-    "api-delay": "^1.0.1",
     "mp4frag": "github:kevinGodell/mp4frag"
   },
   "files": [
