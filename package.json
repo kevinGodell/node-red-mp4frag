@@ -29,15 +29,19 @@
   },
   "homepage": "https://github.com/kevinGodell/node-red-contrib-mp4frag#readme",
   "dependencies": {
+    "hls.js": "^0.14.12",
     "mp4frag": "github:kevinGodell/mp4frag"
   },
   "files": [
     "mp4frag.js",
-    "mp4frag.html"
+    "mp4frag.html",
+    "ui_mp4frag.html",
+    "ui_mp4frag.html"
   ],
   "node-red": {
     "nodes": {
-      "mp4frag": "mp4frag.js"
+      "mp4frag": "mp4frag.js",
+      "ui_mp4frag": "ui_mp4frag.js"
     }
   },
   "devDependencies": {

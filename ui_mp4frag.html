@@ -1,0 +1,43 @@
+<script type="text/javascript">
+
+  // add helper functions here
+  // can be used for validations
+
+  /*
+    register node
+   */
+
+  RED.nodes.registerType('ui_mp4frag', {
+    align: 'left',
+    category: 'cctv',
+    color: '#DEBD5C',
+    defaults: {
+      name: {
+        value: '',
+        required: false,
+      },
+    },
+    icon: 'font-awesome/fa-file-video-o',
+    inputLabels: 'wdget input',
+    inputs: 1,
+    label: function () {
+      return this.name || 'ui_mp4frag';
+    },
+    outputLabels: 'widget output',
+    outputs: 1,
+    oneditprepare: function () {
+      console.log(this);
+    },
+  });
+</script>
+
+<script data-template-name="ui_mp4frag" type="text/html">
+  <div class="form-row">
+    <label style="width:9rem;" for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input style="width:auto;min-width:15rem" type="text" id="node-input-name" placeholder="Name" />
+  </div>
+</script>
+
+<script data-help-name="ui_mp4frag" type="text/html">
+  <p>Play a fragmented mp4.</p>
+</script>
