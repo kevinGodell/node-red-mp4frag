@@ -35,7 +35,7 @@
   "files": [
     "mp4frag.js",
     "mp4frag.html",
-    "ui_mp4frag.html",
+    "ui_mp4frag.js",
     "ui_mp4frag.html"
   ],
   "node-red": {
