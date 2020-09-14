@@ -113,10 +113,14 @@ module.exports = RED => {
 
       this._removeFromBody();
 
-      console.log({ removed }); // removed/disabled === true
-
       if (typeof done === 'function') {
         done();
+      }
+
+      if (removed) {
+        this.status({ fill: 'red', shape: 'ring', text: 'removed' });
+      } else {
+        this.status({ fill: 'red', shape: 'dot', text: 'closed' });
       }
     }
   }
