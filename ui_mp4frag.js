@@ -23,8 +23,6 @@ module.exports = RED => {
 
         UiMp4FragNode._addToHead(); // adds the script to the head (only once)
 
-        this.on('input', this._onInput); // listen to the input event
-
         this.on('close', this._onClose); // listen to the close event
 
         this.status({ fill: 'green', shape: 'ring', text: 'ready' });
@@ -76,21 +74,25 @@ module.exports = RED => {
         format: '<img alt="baby yoda" src="https://miro.medium.com/max/1200/1*mk1-6aYaf_Bes1E3Imhc0A.jpeg"/>',
         templateScope: 'local', // local causes `format` to be inserted in <body>
         emitOnlyNewValues: false,
-        forwardInputMessages: false,
+        forwardInputMessages: false, // true = we do not need to listen to on input event and manually forward msg
         storeFrontEndInputAsState: false,
         convertBack: function (value) {
+          // console.log('convert back', {value});
           return value;
         },
         beforeEmit: function (msg, value) {
-          return { msg: msg };
+          // console.log('before emit', {msg}, {value});
+
+          return { msg };
         },
         beforeSend: function (msg, orig) {
+          // console.log('before send', msg, orig);
           if (orig) {
             return orig.msg;
           }
         },
         initController: function ($scope, events) {
-          console.log($scope);
+          console.log('scope', $scope);
 
           // Remark: all client-side functions should be added here!
           // If added above, it will be server-side functions which are not available at the client-side ...
@@ -106,15 +108,7 @@ module.exports = RED => {
       }
     }
 
-    _onInput(msg) {
-      this.send(msg);
-    }
-
     _onClose(removed, done) {
-      this.off('input', this._onInput);
-
-      this.off('close', this._onClose);
-
       UiMp4FragNode._removeFromHead();
 
       this._removeFromBody();
