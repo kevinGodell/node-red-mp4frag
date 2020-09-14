@@ -1,5 +1,4 @@
 <script type="text/javascript">
-
   // add helper functions here
   // can be used for validations
 
@@ -14,7 +13,19 @@
     defaults: {
       name: {
         value: '',
-        required: false,
+      },
+      group: {
+        type: 'ui_group',
+        required: true,
+      },
+      order: {
+        value: 0,
+      },
+      width: {
+        value: 1,
+      },
+      height: {
+        value: 1,
       },
     },
     icon: 'font-awesome/fa-file-video-o',
@@ -26,15 +37,33 @@
     outputLabels: 'widget output',
     outputs: 1,
     oneditprepare: function () {
-      console.log(this);
+      $('#node-input-size').elementSizer({
+        width: '#node-input-width',
+        height: '#node-input-height',
+        group: '#node-input-group',
+      });
     },
+    oneditsave: function () {},
   });
 </script>
 
 <script data-template-name="ui_mp4frag" type="text/html">
   <div class="form-row">
-    <label style="width:9rem;" for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
     <input style="width:auto;min-width:15rem" type="text" id="node-input-name" placeholder="Name" />
+  </div>
+
+  <div class="form-row" id="template-row-group">
+    <label for="node-input-group"><i class="fa fa-table"></i> Group</label>
+    <input type="text" id="node-input-group" />
+  </div>
+
+  <div class="form-row" id="template-row-size">
+    <label for="node-input-size"><i class="fa fa-object-group"></i> Size</label>
+    <button class="editor-button" id="node-input-size"></button>
+
+    <input type="hidden" id="node-input-width" />
+    <input type="hidden" id="node-input-height" />
   </div>
 </script>
 
