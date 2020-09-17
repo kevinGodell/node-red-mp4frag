@@ -22,10 +22,16 @@
         value: 0,
       },
       width: {
-        value: 1,
+        value: 5,
       },
       height: {
-        value: 1,
+        value: 3,
+      },
+      readyPoster: {
+        value: 'https://raw.githubusercontent.com/kevinGodell/node-red-contrib-mp4frag/master/video_playback_ready.png',
+      },
+      errorPoster: {
+        value: 'https://raw.githubusercontent.com/kevinGodell/node-red-contrib-mp4frag/master/video_playback_error.png',
       },
     },
     icon: 'font-awesome/fa-file-video-o',
@@ -42,6 +48,8 @@
         height: '#node-input-height',
         group: '#node-input-group',
       });
+
+      $('#uiMp4fragHlsJs').val(RED.settings.uiMp4fragHlsJs);
     },
     oneditsave: function () {},
   });
@@ -50,7 +58,7 @@
 <script data-template-name="ui_mp4frag" type="text/html">
   <div class="form-row">
     <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-    <input style="width:auto;min-width:15rem" type="text" id="node-input-name" placeholder="Name" />
+    <input type="text" id="node-input-name" placeholder="Name" />
   </div>
 
   <div class="form-row" id="template-row-group">
@@ -61,9 +69,23 @@
   <div class="form-row" id="template-row-size">
     <label for="node-input-size"><i class="fa fa-object-group"></i> Size</label>
     <button class="editor-button" id="node-input-size"></button>
-
     <input type="hidden" id="node-input-width" />
     <input type="hidden" id="node-input-height" />
+  </div>
+
+  <div class="form-row">
+    <label for="node-input-readyPoster"><i class="fa fa-picture-o"></i> Ready</label>
+    <input type="text" id="node-input-readyPoster" />
+  </div>
+
+  <div class="form-row">
+    <label for="node-input-errorPoster"><i class="fa fa-picture-o"></i> Error</label>
+    <input type="text" id="node-input-errorPoster" />
+  </div>
+
+  <div class="form-row">
+    <label for="uiMp4fragHlsJs"><i class="fa fa-book"></i> HLS.js</label>
+    <input type="text" id="uiMp4fragHlsJs" readonly />
   </div>
 </script>
 
