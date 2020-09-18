@@ -7,7 +7,7 @@ module.exports = RED => {
 
   const { addWidget } = RED.require('node-red-dashboard')(RED);
 
-  const { uiMp4fragHlsJs = 'https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.light.min.js' } = RED.settings;
+  const { uiMp4fragHlsJs = 'https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.js' } = RED.settings;
 
   const NODE_TYPE = 'ui_mp4frag';
 
@@ -23,11 +23,11 @@ module.exports = RED => {
 
         UiMp4FragNode.addToHead(); // adds the script to the head (only once)
 
-        this._onInput = msg => UiMp4FragNode.onInput(this, msg); // bind `this` using fat arrow
+        this._onInput = msg => void UiMp4FragNode.onInput(this, msg); // bind `this` using fat arrow, void to indicate no return val
 
         this.on('input', this._onInput); // listen to the input event
 
-        this._onClose = (removed, done) => UiMp4FragNode.onClose(this, removed, done);
+        this._onClose = (removed, done) => void UiMp4FragNode.onClose(this, removed, done);
 
         this.on('close', this._onClose); // listen to the close event
 
@@ -46,14 +46,14 @@ module.exports = RED => {
     }
 
     static addToHead() {
-      if (UiMp4FragNode.nodeCount++ === 0 && UiMp4FragNode.headDone === undefined) {
+      if (UiMp4FragNode.headDone === undefined && UiMp4FragNode.nodeCount++ === 0) {
         UiMp4FragNode.headDone = addWidget({
           node: '',
           group: '',
           order: 0,
           width: 0,
           height: 0,
-          format: `<script src="${uiMp4fragHlsJs}"></script>`,
+          format: UiMp4FragNode.renderHead(),
           templateScope: 'global', // global causes `format` to be inserted in <head>
           emitOnlyNewValues: false,
           forwardInputMessages: false,
@@ -63,7 +63,7 @@ module.exports = RED => {
     }
 
     static removeFromHead() {
-      if (--UiMp4FragNode.nodeCount === 0 && typeof UiMp4FragNode.headDone === 'function') {
+      if (typeof UiMp4FragNode.headDone === 'function' && --UiMp4FragNode.nodeCount === 0) {
         UiMp4FragNode.headDone();
 
         UiMp4FragNode.headDone = undefined;
@@ -77,7 +77,7 @@ module.exports = RED => {
         order: config.order || 0,
         width: config.width,
         height: config.height,
-        format: UiMp4FragNode.renderHtml(config),
+        format: UiMp4FragNode.renderBody(config),
         templateScope: 'local', // local causes `format` to be inserted in <body>
         emitOnlyNewValues: false,
         forwardInputMessages: false, // true = we do not need to listen to on input event and manually forward msg
@@ -97,37 +97,39 @@ module.exports = RED => {
           }
         },
         initController: function ($scope, events) {
-          async function playVideo() {
+          $scope.hasHlsJs = function () {
+            return typeof Hls === 'function' && Hls.isSupported() === true;
+          };
+
+          $scope.hasHlsNative = function () {
+            return $scope.video.canPlayType('application/vnd.apple.mpegurl') !== '';
+          };
+
+          $scope.playVideo = async function () {
             $scope.video.poster = $scope.config.readyPoster;
             try {
               await $scope.video.play();
-              console.log('hls video playing');
+              $scope.video.controls = true;
             } catch (err) {
               console.error(err);
               videoError();
             }
-          }
+          };
 
-          function videoError() {
+          $scope.videoError = function () {
             console.log('error video id', $scope.video.id);
-            $scope.video.onmouseover = $scope.video.onmouseout = undefined;
             $scope.video.controls = false;
             $scope.video.poster = $scope.config.errorPoster;
-          }
+          };
+
+          $scope.flag = true;
 
           $scope.init = function (config) {
             $scope.config = config;
-            $scope.hlsJs = window.Hls && window.Hls.isSupported();
-            $scope.video = document.getElementById(config.videoID);
-            $scope.hlsNative = $scope.video.canPlayType('application/vnd.apple.mpegurl') !== ''; // probably|maybe|''
 
-            // todo controls: mouseover, hidden, always, external(pass the video's id to some other ui component)
-            $scope.video.onmouseover = function () {
-              $scope.video.controls = true;
-            };
-            $scope.video.onmouseout = function () {
-              $scope.video.controls = false;
-            };
+            $scope.video = document.getElementById(config.videoID);
+
+            $scope.video.controls = false;
           };
 
           $scope.$watch('msg', function (msg) {
@@ -143,19 +145,24 @@ module.exports = RED => {
               $scope.hls.destroy();
             }
 
+            if ($scope.video.src) {
+              $scope.video.src = '';
+            }
+
             if (!msg.payload) {
               console.log('empty payload is trigger for video to not start after being stopped');
               return;
             }
 
             if (msg.payload.endsWith('.m3u8') === false) {
-              videoError();
+              console.error(`bad playlist ${msg.payload}`);
+              $scope.videoError();
               return;
             }
 
             // todo check config to see if we should use hls.js or native, either both in some order, or only 1
-            if ($scope.hlsJs) {
-              console.log('trying hls js');
+            if ($scope.hasHlsJs() === true) {
+              console.log('trying Hls.js');
 
               $scope.hls = new Hls({
                 liveDurationInfinity: true,
@@ -170,9 +177,9 @@ module.exports = RED => {
 
               $scope.hls.attachMedia($scope.video);
 
-              $scope.hls.on(Hls.Events.MANIFEST_PARSED, async function () {
+              $scope.hls.on(Hls.Events.MANIFEST_PARSED, function () {
                 console.log('manifest parsed');
-                playVideo();
+                $scope.playVideo();
               });
 
               $scope.hls.on(Hls.Events.ERROR, function (event, data) {
@@ -193,7 +200,7 @@ module.exports = RED => {
                   }
                 }
               });
-            } else if ($scope.hlsNative) {
+            } else if ($scope.hasHlsNative() === true) {
               console.log('trying hls native');
 
               $scope.video.onerror = function () {
@@ -214,19 +221,18 @@ module.exports = RED => {
                     console.error('MediaError.MS_MEDIA_ERR_ENCRYPTED');
                     break;
                 }
-                videoError();
+                $scope.videoError();
               };
 
               $scope.video.src = msg.payload;
 
-              $scope.video.addEventListener('loadedmetadata', async function () {
+              $scope.video.addEventListener('loadedmetadata', function () {
                 console.log('loadedmetadata');
-
-                playVideo();
+                $scope.playVideo();
               });
             } else {
               console.error('your browser does not support hls video playback');
-              videoError();
+              $scope.videoError();
             }
           });
         },
@@ -269,10 +275,15 @@ module.exports = RED => {
       }
     }
 
-    static renderHtml(config) {
+    static renderHead() {
+      return String.raw`<script type="text/javascript" src="${uiMp4fragHlsJs}"></script>`;
+      // return String.raw`<script>const scriptElem = document.createElement('script');scriptElem.type = 'text/javascript';scriptElem.src = '${uiMp4fragHlsJs}';scriptElem.async = false;scriptElem.defer = false;const headElem = document.getElementsByTagName('head')[0];headElem.parentNode.appendChild(scriptElem);</script>`;
+    }
+
+    static renderBody(config) {
       const style = 'width:100%;height:100%;overflow:hidden;border:1px solid black;';
       // todo muted playsinline poster will all be checkbox options, maybe as a single `options` value
-      return `<div style="${style}" ng-init='init(${JSON.stringify(config)})'>
+      return String.raw`<div style="${style}" ng-init='init(${JSON.stringify(config)})'>
         <video id="${config.videoID}" style="width:100%;height:100%;" muted playsinline poster="${config.readyPoster}">
           <p>Your browser does not support the HTML5 Video element.</p>
         </video>
