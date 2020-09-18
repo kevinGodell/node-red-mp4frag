@@ -112,7 +112,7 @@ module.exports = RED => {
               $scope.video.controls = true;
             } catch (err) {
               console.error(err);
-              videoError();
+              $scope.videoError();
             }
           };
 
@@ -132,34 +132,7 @@ module.exports = RED => {
             $scope.video.controls = false;
           };
 
-          $scope.$watch('msg', function (msg) {
-            if (!msg) {
-              return;
-            }
-
-            if ($scope.video.paused === false || $scope.video.ended === false) {
-              $scope.video.pause();
-            }
-
-            if ($scope.hls) {
-              $scope.hls.destroy();
-            }
-
-            if ($scope.video.src) {
-              $scope.video.src = '';
-            }
-
-            if (!msg.payload) {
-              console.log('empty payload is trigger for video to not start after being stopped');
-              return;
-            }
-
-            if (msg.payload.endsWith('.m3u8') === false) {
-              console.error(`bad playlist ${msg.payload}`);
-              $scope.videoError();
-              return;
-            }
-
+          $scope.setupVideo = function (playlist) {
             // todo check config to see if we should use hls.js or native, either both in some order, or only 1
             if ($scope.hasHlsJs() === true) {
               console.log('trying Hls.js');
@@ -173,7 +146,7 @@ module.exports = RED => {
                 manifestLoadingRetryDelay: 500,
               });
 
-              $scope.hls.loadSource(msg.payload);
+              $scope.hls.loadSource(playlist);
 
               $scope.hls.attachMedia($scope.video);
 
@@ -224,7 +197,7 @@ module.exports = RED => {
                 $scope.videoError();
               };
 
-              $scope.video.src = msg.payload;
+              $scope.video.src = playlist;
 
               $scope.video.addEventListener('loadedmetadata', function () {
                 console.log('loadedmetadata');
@@ -234,6 +207,45 @@ module.exports = RED => {
               console.error('your browser does not support hls video playback');
               $scope.videoError();
             }
+          };
+
+          $scope.$watch('msg', function (msg) {
+            if (!msg) {
+              return;
+            }
+
+            if ($scope.video.paused === false || $scope.video.ended === false) {
+              $scope.video.pause();
+            }
+
+            if ($scope.hls) {
+              $scope.hls.destroy();
+            }
+
+            if ($scope.video.src) {
+              $scope.video.src = '';
+            }
+
+            if (!msg.payload) {
+              console.log('empty payload is trigger for video to not start after being stopped');
+              return;
+            }
+
+            if (msg.payload.endsWith('.m3u8') === false) {
+              console.error(`bad playlist ${msg.payload}`);
+              $scope.videoError();
+              return;
+            }
+
+            if (typeof Hls === 'undefined') {
+              setTimeout(() => {
+                $scope.setupVideo(msg.payload);
+              }, 2000);
+              console.warn('received playlist before Hls.js loaded, try again in 2 seconds');
+              return;
+            }
+
+            $scope.setupVideo(msg.payload);
           });
         },
       });
