@@ -106,7 +106,6 @@ module.exports = RED => {
           };
 
           $scope.playVideo = async function () {
-            $scope.video.poster = $scope.config.readyPoster;
             try {
               await $scope.video.play();
               $scope.video.controls = true;
@@ -122,17 +121,31 @@ module.exports = RED => {
             $scope.video.poster = $scope.config.errorPoster;
           };
 
-          $scope.flag = true;
-
           $scope.init = function (config) {
             $scope.config = config;
 
             $scope.video = document.getElementById(config.videoID);
-
-            $scope.video.controls = false;
           };
 
-          $scope.setupVideo = function (playlist) {
+          // todo might name this .resetVideo()??
+          $scope.destroyVideo = function () {
+            // todo might just call pause() without checking video properties
+            if ($scope.video.paused === false || $scope.video.ended === false) {
+              $scope.video.pause();
+            }
+
+            if ($scope.hls) {
+              $scope.hls.destroy();
+            } else {
+              $scope.video.src = '';
+            }
+
+            $scope.video.controls = false;
+
+            $scope.video.poster = $scope.config.readyPoster;
+          };
+
+          $scope.createVideo = function () {
             // todo check config to see if we should use hls.js or native, either both in some order, or only 1
             if ($scope.hasHlsJs() === true) {
               console.log('trying Hls.js');
@@ -146,10 +159,11 @@ module.exports = RED => {
                 manifestLoadingRetryDelay: 500,
               });
 
-              $scope.hls.loadSource(playlist);
+              $scope.hls.loadSource($scope.playlist);
 
               $scope.hls.attachMedia($scope.video);
 
+              // todo check config.autoplay
               $scope.hls.on(Hls.Events.MANIFEST_PARSED, function () {
                 console.log('manifest parsed');
                 $scope.playVideo();
@@ -197,7 +211,7 @@ module.exports = RED => {
                 $scope.videoError();
               };
 
-              $scope.video.src = playlist;
+              $scope.video.src = $scope.playlist;
 
               $scope.video.addEventListener('loadedmetadata', function () {
                 console.log('loadedmetadata');
@@ -214,38 +228,52 @@ module.exports = RED => {
               return;
             }
 
-            if ($scope.video.paused === false || $scope.video.ended === false) {
-              $scope.video.pause();
-            }
+            // todo switch(msg.topic)...
 
-            if ($scope.hls) {
-              $scope.hls.destroy();
-            }
-
-            if ($scope.video.src) {
-              $scope.video.src = '';
-            }
+            // resets video player
+            $scope.destroyVideo();
 
             if (!msg.payload) {
-              console.log('empty payload is trigger for video to not start after being stopped');
+              // todo should empty payload or a msg.topic = stop|destroy tell us to quit ??
+              console.log('empty payload causes the process to NOT start a new video');
               return;
             }
 
+            // simple check to see if playlist should be valid
             if (msg.payload.endsWith('.m3u8') === false) {
               console.error(`bad playlist ${msg.payload}`);
               $scope.videoError();
               return;
             }
 
+            // save playlist in case we can't use it immediately due to Hls.js race condition
+            $scope.playlist = msg.payload;
+
+            // debugger;
+            // running debugger or console.log() gives Hls a chance to be ready
+
+            /*
+              todo: fix this hack
+              - handle Hls race condition if lib not already cached in browser
+              - Hls will be undefined when playlist msg arrives
+              - condition can be easily illustrated when using private browsing mode
+              in firefox and loading ui video player for first time
+            */
             if (typeof Hls === 'undefined') {
-              setTimeout(() => {
-                $scope.setupVideo(msg.payload);
+              if (typeof $scope.timeout !== 'undefined') {
+                clearTimeout($scope.timeout);
+              }
+
+              $scope.timeout = setTimeout(() => {
+                $scope.timeout = undefined;
+                $scope.createVideo();
               }, 2000);
-              console.warn('received playlist before Hls.js loaded, try again in 2 seconds');
+              console.warn('received playlist before Hls.js loaded, trying again in 2 seconds');
               return;
             }
 
-            $scope.setupVideo(msg.payload);
+            // if we made it here, Hls must be available, safe to create video
+            $scope.createVideo();
           });
         },
       });
