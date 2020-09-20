@@ -7,7 +7,7 @@ module.exports = RED => {
 
   const { addWidget } = RED.require('node-red-dashboard')(RED);
 
-  const { uiMp4fragHlsJs = 'https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.js' } = RED.settings;
+  const { uiMp4fragHlsJs = 'https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js' } = RED.settings;
 
   const NODE_TYPE = 'ui_mp4frag';
 
@@ -82,73 +82,66 @@ module.exports = RED => {
         emitOnlyNewValues: false,
         forwardInputMessages: false, // true = we do not need to listen to on input event and manually forward msg
         storeFrontEndInputAsState: false,
-        convertBack: function (value) {
+        convertBack: value => {
           // console.log('convert back', {value});
           return value;
         },
-        beforeEmit: function (msg, value) {
+        beforeEmit: (msg, value) => {
           // console.log('before emit', {msg}, {value});
           return { msg };
         },
-        beforeSend: function (msg, orig) {
+        beforeSend: (msg, orig) => {
           // console.log('before send', {msg}, {orig});
           if (orig) {
             return orig.msg;
           }
         },
-        initController: function ($scope, events) {
-          $scope.hasHlsJs = function () {
+        initController: ($scope, events) => {
+          const hasHlsJs = () => {
             return typeof Hls === 'function' && Hls.isSupported() === true;
           };
 
-          $scope.hasHlsNative = function () {
+          const hasHlsNative = () => {
             return $scope.video.canPlayType('application/vnd.apple.mpegurl') !== '';
           };
 
-          $scope.playVideo = async function () {
-            try {
-              await $scope.video.play();
-              $scope.video.controls = true;
-            } catch (err) {
-              console.error(err);
-              $scope.videoError();
-            }
-          };
+          const destroyVideo = errored => {
+            $scope.video.pause();
 
-          $scope.videoError = function () {
-            console.log('error video id', $scope.video.id);
-            $scope.video.controls = false;
-            $scope.video.poster = $scope.config.errorPoster;
-          };
-
-          $scope.init = function (config) {
-            $scope.config = config;
-
-            $scope.video = document.getElementById(config.videoID);
-          };
-
-          // todo might name this .resetVideo()??
-          $scope.destroyVideo = function () {
-            // todo might just call pause() without checking video properties
-            if ($scope.video.paused === false || $scope.video.ended === false) {
-              $scope.video.pause();
-            }
-
-            if ($scope.hls) {
+            if (typeof $scope.hls === 'object' && typeof $scope.hls.destroy === 'function') {
               $scope.hls.destroy();
             } else {
-              $scope.video.src = '';
+              $scope.video.removeAttribute('src');
+
+              $scope.video.load();
+
+              $scope.video.onerror = undefined;
             }
 
             $scope.video.controls = false;
 
-            $scope.video.poster = $scope.config.readyPoster;
+            $scope.video.poster = errored === true ? $scope.config.errorPoster : $scope.config.readyPoster;
           };
 
-          $scope.createVideo = function () {
-            // todo check config to see if we should use hls.js or native, either both in some order, or only 1
-            if ($scope.hasHlsJs() === true) {
-              console.log('trying Hls.js');
+          const videoError = err => {
+            console.error(`Error: id = ${$scope.video.id} details = ${err}`);
+
+            destroyVideo(true);
+          };
+
+          const playVideo = async () => {
+            try {
+              await $scope.video.play();
+
+              $scope.video.controls = true;
+            } catch (err) {
+              videoError(err);
+            }
+          };
+
+          const createVideo = () => {
+            if (hasHlsJs() === true) {
+              console.log(`Log: id = ${$scope.video.id} details = trying Hls.js`);
 
               $scope.hls = new Hls({
                 liveDurationInfinity: true,
@@ -159,17 +152,17 @@ module.exports = RED => {
                 manifestLoadingRetryDelay: 500,
               });
 
-              $scope.hls.loadSource($scope.playlist);
+              $scope.hls.loadSource($scope.msg.payload);
 
               $scope.hls.attachMedia($scope.video);
 
               // todo check config.autoplay
-              $scope.hls.on(Hls.Events.MANIFEST_PARSED, function () {
-                console.log('manifest parsed');
-                $scope.playVideo();
+              $scope.hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                // console.log('manifest parsed');
+                playVideo();
               });
 
-              $scope.hls.on(Hls.Events.ERROR, function (event, data) {
+              $scope.hls.on(Hls.Events.ERROR, (event, data) => {
                 if (data.fatal) {
                   switch (data.type) {
                     case Hls.ErrorTypes.NETWORK_ERROR:
@@ -181,76 +174,57 @@ module.exports = RED => {
                       $scope.hls.recoverMediaError();
                       break;
                     default:
-                      console.log('cannot recover, calling hls.destroy()');
-                      $scope.hls.destroy();
+                      // console.log('cannot recover, calling hls.destroy()');
+                      videoError(data);
                       break;
                   }
                 }
               });
-            } else if ($scope.hasHlsNative() === true) {
-              console.log('trying hls native');
+            } else if (hasHlsNative() === true) {
+              console.log(`Log: id = ${$scope.video.id} details = trying Hls native`);
 
-              $scope.video.onerror = function () {
-                switch ($scope.video.error.code) {
-                  case MediaError.MEDIA_ERR_ABORTED:
-                    console.error('MediaError.MEDIA_ERR_ABORTED');
-                    break;
-                  case MediaError.MEDIA_ERR_DECODE:
-                    console.error('MediaError.MEDIA_ERR_DECODE');
-                    break;
-                  case MediaError.MEDIA_ERR_NETWORK:
-                    console.error('MediaError.MEDIA_ERR_NETWORK');
-                    break;
-                  case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
-                    console.error('MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED');
-                    break;
-                  case MediaError.MS_MEDIA_ERR_ENCRYPTED:
-                    console.error('MediaError.MS_MEDIA_ERR_ENCRYPTED');
-                    break;
-                }
-                $scope.videoError();
+              $scope.video.onerror = () => {
+                videoError($scope.video.error);
               };
 
-              $scope.video.src = $scope.playlist;
+              $scope.video.src = $scope.msg.payload;
 
-              $scope.video.addEventListener('loadedmetadata', function () {
-                console.log('loadedmetadata');
-                $scope.playVideo();
+              $scope.video.addEventListener('loadedmetadata', () => {
+                // console.log('loadedmetadata');
+
+                playVideo();
               });
             } else {
-              console.error('your browser does not support hls video playback');
-              $scope.videoError();
+              videoError('Hls.js and Hls native video not supported');
             }
           };
 
-          $scope.$watch('msg', function (msg) {
-            if (!msg) {
+          // function called by ng-init='init(${JSON.stringify(config)})'
+          $scope.init = config => {
+            $scope.config = config;
+
+            $scope.video = document.getElementById(config.videoID);
+          };
+
+          // watch for changes to $scope.msg, used to relay info from backend
+          $scope.$watch('msg', (newVal, oldVal) => {
+            // console.log(typeof newVal, typeof oldVal);
+
+            if (typeof newVal === 'undefined') {
               return;
             }
 
             // todo switch(msg.topic)...
 
             // resets video player
-            $scope.destroyVideo();
+            destroyVideo();
 
-            if (!msg.payload) {
-              // todo should empty payload or a msg.topic = stop|destroy tell us to quit ??
-              console.log('empty payload causes the process to NOT start a new video');
+            if (newVal.payload.endsWith('.m3u8') === false) {
+              console.warn(
+                `Warn: id = ${$scope.video.id} details = video stopped due to payload: '${$scope.msg.payload}'`
+              );
               return;
             }
-
-            // simple check to see if playlist should be valid
-            if (msg.payload.endsWith('.m3u8') === false) {
-              console.error(`bad playlist ${msg.payload}`);
-              $scope.videoError();
-              return;
-            }
-
-            // save playlist in case we can't use it immediately due to Hls.js race condition
-            $scope.playlist = msg.payload;
-
-            // debugger;
-            // running debugger or console.log() gives Hls a chance to be ready
 
             /*
               todo: fix this hack
@@ -266,15 +240,20 @@ module.exports = RED => {
 
               $scope.timeout = setTimeout(() => {
                 $scope.timeout = undefined;
-                $scope.createVideo();
+                createVideo();
               }, 2000);
-              console.warn('received playlist before Hls.js loaded, trying again in 2 seconds');
+              console.warn(`Warn: id = ${$scope.video.id} details = Hls.js is undefined, trying again in 2 seconds`);
               return;
             }
 
-            // if we made it here, Hls must be available, safe to create video
-            $scope.createVideo();
+            // if we made it here, Hls.js must be available, safe to create video
+            createVideo();
           });
+
+          /* const destroy = $scope.$on('$destroy', function () {
+            console.log('destroyed');
+            //destroy();
+          });*/
         },
       });
     }
