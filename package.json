@@ -29,8 +29,8 @@
   },
   "homepage": "https://github.com/kevinGodell/node-red-contrib-mp4frag#readme",
   "dependencies": {
-    "hls.js": "^0.14.12",
-    "mp4frag": "github:kevinGodell/mp4frag"
+    "mp4frag": "github:kevinGodell/mp4frag",
+    "node-red-dashboard": "^2.23.3"
   },
   "files": [
     "mp4frag.js",
