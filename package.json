@@ -36,7 +36,8 @@
     "mp4frag.js",
     "mp4frag.html",
     "ui_mp4frag.js",
-    "ui_mp4frag.html"
+    "ui_mp4frag.html",
+    "lib/initController.js"
   ],
   "node-red": {
     "nodes": {
