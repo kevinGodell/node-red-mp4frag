@@ -33,6 +33,11 @@
       errorPoster: {
         value: 'https://raw.githubusercontent.com/kevinGodell/node-red-contrib-mp4frag/master/video_playback_error.png',
       },
+      hlsJsConfig: {
+        value: JSON.stringify({ name: 'kevin' }),
+        validate: RED.validators.typedInput('hlsJsConfigType'),
+      },
+      hlsJsConfigType: { value: 'json' },
     },
     icon: 'font-awesome/fa-file-video-o',
     inputLabels: 'wdget input',
@@ -49,7 +54,20 @@
         group: '#node-input-group',
       });
 
-      $('#uiMp4fragHlsJs').val(RED.settings.uiMp4fragHlsJs);
+      $('#uiMp4fragHlsJs')
+        .val(RED.settings.uiMp4fragHlsJs)
+        .focus(() => {
+          RED.notify(
+            `Add property <strong>uiMp4fragHlsJs</strong> to <em>settings.js</em><hr/><code class="form-tip form-tips">uiMp4fragHlsJs: 'url-to-lib-hls.js'</code>`,
+            'error'
+          );
+        });
+
+      $('#node-input-hlsJsConfig')
+        .typedInput({ types: ['json'] })
+        .typedInput('type', 'json')
+        .typedInput('value', this.hlsJsConfig);
+
     },
     oneditsave: function () {},
   });
@@ -83,10 +101,19 @@
     <input type="text" id="node-input-errorPoster" />
   </div>
 
-  <div class="form-row">
-    <label for="uiMp4fragHlsJs"><i class="fa fa-book"></i> HLS.js</label>
-    <input type="text" id="uiMp4fragHlsJs" readonly />
-  </div>
+  <fieldset>
+    <legend>hls.js options:</legend>
+
+    <div class="form-row">
+      <label for="uiMp4fragHlsJs"><i class="fa fa-book"></i> URL</label>
+      <input type="text" id="uiMp4fragHlsJs" readonly />
+    </div>
+
+    <div class="form-row">
+      <label for="node-input-hlsJsConfig"><i class="fa fa-book"></i> Config</label>
+      <input type="text" id="node-input-hlsJsConfig" />
+    </div>
+  </fieldset>
 </script>
 
 <script data-help-name="ui_mp4frag" type="text/html">
