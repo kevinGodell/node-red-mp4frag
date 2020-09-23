@@ -170,7 +170,7 @@ module.exports = RED => {
 
       const [value, type] = UiMp4FragNode.jsonParse(hlsJsConfig);
 
-      config.hlsJsConfig = value === null || type !== 'object' ? {} : value;
+      config.hlsJsConfig = type === 'object' && value !== null ? value : {};
     }
   }
 
