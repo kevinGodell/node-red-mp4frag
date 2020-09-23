@@ -21,6 +21,8 @@ module.exports = RED => {
       if (UiMp4FragNode.uiGroupExists(config) === true) {
         config.videoID = `video_${NODE_TYPE}_${this.id}`;
 
+        UiMp4FragNode.sanitizeHlsJsConfig(config);
+
         UiMp4FragNode.addToHead(); // adds the script to the head (only once)
 
         UiMp4FragNode.addToBody(this, config); // adds the html markup to the body
@@ -149,6 +151,26 @@ module.exports = RED => {
       return String.raw`<div style="${style}" ng-init='init(${JSON.stringify(config)})'>
   <video id="${config.videoID}" style="width:100%;height:100%;" ${videoOptions} poster="${config.readyPoster}"></video>
 </div>`;
+    }
+
+    // return object if good, undefined if bad
+    static jsonParse(str) {
+      try {
+        const value = JSON.parse(str);
+        const type = typeof value;
+        return [value, type];
+      } catch (e) {
+        console.warn(e);
+        return [undefined, 'undefined'];
+      }
+    }
+
+    static sanitizeHlsJsConfig(config) {
+      const { hlsJsConfig } = config;
+
+      const [value, type] = UiMp4FragNode.jsonParse(hlsJsConfig);
+
+      config.hlsJsConfig = value === null || type !== 'object' ? {} : value;
     }
   }
 

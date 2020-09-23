@@ -34,13 +34,19 @@
         value: 'https://raw.githubusercontent.com/kevinGodell/node-red-contrib-mp4frag/master/video_playback_error.png',
       },
       hlsJsConfig: {
-        value: JSON.stringify({ name: 'kevin' }),
-        validate: RED.validators.typedInput('hlsJsConfigType'),
+        value: JSON.stringify({
+          liveDurationInfinity: true,
+          liveBackBufferLength: 0,
+          maxBufferLength: 5, // default 30
+          manifestLoadingTimeOut: 1000,
+          manifestLoadingMaxRetry: 10,
+          manifestLoadingRetryDelay: 500,
+        }),
+        validate: RED.validators.typedInput('json'),
       },
-      hlsJsConfigType: { value: 'json' },
     },
     icon: 'font-awesome/fa-file-video-o',
-    inputLabels: 'wdget input',
+    inputLabels: 'widget input',
     inputs: 1,
     label: function () {
       return this.name || 'ui_mp4frag';
@@ -63,11 +69,7 @@
           );
         });
 
-      $('#node-input-hlsJsConfig')
-        .typedInput({ types: ['json'] })
-        .typedInput('type', 'json')
-        .typedInput('value', this.hlsJsConfig);
-
+      $('#node-input-hlsJsConfig').typedInput({ types: ['json'] });
     },
     oneditsave: function () {},
   });
@@ -102,7 +104,7 @@
   </div>
 
   <fieldset>
-    <legend>hls.js options:</legend>
+    <legend>hls.js options</legend>
 
     <div class="form-row">
       <label for="uiMp4fragHlsJs"><i class="fa fa-book"></i> URL</label>
@@ -110,7 +112,7 @@
     </div>
 
     <div class="form-row">
-      <label for="node-input-hlsJsConfig"><i class="fa fa-book"></i> Config</label>
+      <label for="node-input-hlsJsConfig">Config:</label>
       <input type="text" id="node-input-hlsJsConfig" />
     </div>
   </fieldset>
