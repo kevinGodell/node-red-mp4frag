@@ -1,11 +1,9 @@
 <script type="text/javascript">
   // add helper functions here
-  // can be used for validations
 
   /*
     register node
    */
-
   RED.nodes.registerType('ui_mp4frag', {
     align: 'left',
     category: 'cctv',
@@ -25,7 +23,7 @@
         value: 5,
       },
       height: {
-        value: 3,
+        value: 4,
       },
       readyPoster: {
         value: 'https://raw.githubusercontent.com/kevinGodell/node-red-contrib-mp4frag/master/video_playback_ready.png',
@@ -35,6 +33,7 @@
       },
       hlsJsConfig: {
         value: JSON.stringify({
+          debug: false,
           liveDurationInfinity: true,
           liveBackBufferLength: 0,
           maxBufferLength: 5, // default 30
@@ -43,6 +42,14 @@
           manifestLoadingRetryDelay: 500,
         }),
         validate: RED.validators.typedInput('json'),
+      },
+      restart: {
+        value: true,
+        validate: RED.validators.typedInput('bool'),
+      },
+      autoplay: {
+        value: true,
+        validate: RED.validators.typedInput('bool'),
       },
     },
     icon: 'font-awesome/fa-file-video-o',
@@ -62,12 +69,16 @@
 
       $('#uiMp4fragHlsJs')
         .val(RED.settings.uiMp4fragHlsJs)
-        .focus(() => {
+        .on('click', () => {
           RED.notify(
             `Add property <strong>uiMp4fragHlsJs</strong> to <em>settings.js</em><hr/><code class="form-tip form-tips">uiMp4fragHlsJs: 'url-to-lib-hls.js'</code>`,
             'error'
           );
         });
+
+      $('#node-input-autoplay').typedInput({ types: ['bool'] });
+
+      $('#node-input-restart').typedInput({ types: ['bool'] });
 
       $('#node-input-hlsJsConfig').typedInput({ types: ['json'] });
     },
@@ -104,6 +115,20 @@
   </div>
 
   <fieldset>
+    <legend>video options</legend>
+
+    <div class="form-row">
+      <label for="node-input-autoplay"><i class="fa fa-play"></i> Autoplay</label>
+      <input type="text" id="node-input-autoplay" />
+    </div>
+
+    <div class="form-row">
+      <label for="node-input-restart"><i class="fa fa-repeat"></i> Restart</label>
+      <input type="text" id="node-input-restart" />
+    </div>
+  </fieldset>
+
+  <fieldset>
     <legend>hls.js options</legend>
 
     <div class="form-row">
@@ -112,7 +137,7 @@
     </div>
 
     <div class="form-row">
-      <label for="node-input-hlsJsConfig">Config:</label>
+      <label for="node-input-hlsJsConfig"><i class="fa fa-cog"></i> Config</label>
       <input type="text" id="node-input-hlsJsConfig" />
     </div>
   </fieldset>
