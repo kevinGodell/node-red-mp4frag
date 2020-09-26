@@ -4,57 +4,24 @@
    or is scoped to only our nodes?
    */
 
-  const uniqueNameRegex = RED.validators.regex(/^(?:(?!^Change_This_Name$)[a-z_]){3,50}$/i);
-
-  const hlsListSize = node => {
-    const hlsListSizeElem = $('#node-input-hlsListSize');
-    return hlsListSizeElem.length ? hlsListSizeElem.val() : node.hlsListSize;
+  // define magic numbers
+  const MAGIC = {
+    hlsListSizeDef: 4,
+    hlsListSizeMin: 2,
+    hlsListSizeMax: 10,
+    hlsListExtraDef: 0,
+    hlsListExtraMin: 0,
+    hlsListExtraMax: 4,
   };
 
-  const uniqueName = node => {
-    const uniqueNameElem = $('#node-input-uniqueName');
-    return uniqueNameElem.length ? uniqueNameElem.val() : node.uniqueName;
-  };
+  // regex to match hlsListUrl allowed characters
+  const hlsListUrlRegex = RED.validators.regex(/^[a-z0-9_.]{1,50}$/i);
 
-  const contextAccess = node => {
-    const contextAccessElem = $('#node-input-contextAccess');
-    return contextAccessElem.length ? contextAccessElem.val() : node.contextAccess;
-  };
-
-  const httpRoutes = node => {
-    const httpRoutesElem = $('#node-input-httpRoutes');
-    return httpRoutesElem.length ? httpRoutesElem.is(':checked') : node.httpRoutes;
-  };
-
-  const routesStructure = node => {
-    const routesStructureElem = $('#node-input-routesStructure');
-    return routesStructureElem.length ? routesStructureElem.val() : node.routesStructure;
-  };
-
-  const httpRoutesToggle = bool => {
-    const routesStructure = $('#routesStructure');
-    routesStructure.length && bool === true ? routesStructure.show() : routesStructure.hide();
-  };
-
-  const updatePlaylist = (node, routesStructure) => {
-    const playlist = $('#playlist');
-    if (playlist.length) {
-      if (routesStructure === 'id_path') {
-        return playlist.text(`/mp4frag/${node.id}/hls.m3u8`);
-      }
-      const uniqueNameStr = uniqueName(node);
-      if (routesStructure === 'unique_path' && uniqueNameRegex(uniqueNameStr)) {
-        return playlist.text(`/mp4frag/${uniqueNameStr}/hls.m3u8`);
-      }
-      return playlist.text('invalid data');
-    }
-  };
-
-  // checks if other node already using uniqueName
-  const uniqueNameExists = (id, uniqueName) => {
+  // check if other node already using unique value
+  const uniqueValInUse = obj => {
     let exists = false;
     RED.nodes.eachNode(function (node) {
-      if (node.type === 'mp4frag' && node.id !== id && node.uniqueName === uniqueName) {
+      if (node.id !== obj.id && node.type === obj.type && node[obj.name] === obj.value) {
         exists = true;
       }
     });
@@ -72,51 +39,29 @@
     defaults: {
       name: {
         value: '',
-        required: false,
       },
       hlsListSize: {
-        value: 4,
+        value: MAGIC.hlsListSizeDef,
         required: true,
-        validate: async function (hlsListSize) {
-          return hlsListSize >= 2 && hlsListSize <= 10;
+        validate: function (hlsListSize) {
+          return hlsListSize >= MAGIC.hlsListSizeMin && hlsListSize <= MAGIC.hlsListSizeMax;
         },
       },
-      uniqueName: {
+      hlsListExtra: {
+        value: MAGIC.hlsListExtraDef,
+        required: true,
+        validate: function (hlsListExtra) {
+          return hlsListExtra >= MAGIC.hlsListExtraMin && hlsListExtra <= MAGIC.hlsListExtraMax;
+        },
+      },
+      hlsListUrl: {
         value: '',
-        required: false,
-        validate: function (uniqueName) {
-          if (
-            contextAccess(this) === 'none' &&
-            (httpRoutes(this) === false || routesStructure(this) === 'id_path') &&
-            !uniqueName
-          ) {
-            return true;
-          }
-          return uniqueNameRegex(uniqueName) === true && uniqueNameExists(this.id, uniqueName) === false;
-        },
-      },
-      contextAccess: {
-        value: 'none',
         required: true,
-        validate: function (contextAccess) {
-          return ['none', 'flow', 'global'].includes(contextAccess);
-        },
-      },
-      httpRoutes: {
-        value: true,
-        required: true,
-        validate: function (/*checkbox does not return if checked*/) {
-          const httpRoutesBool = httpRoutes(this);
-          httpRoutesToggle(httpRoutesBool);
-          return typeof httpRoutesBool === 'boolean';
-        },
-      },
-      routesStructure: {
-        value: 'id_path',
-        required: false,
-        validate: function (routesStructure) {
-          updatePlaylist(this, routesStructure);
-          return ['unique_path', 'id_path'].includes(routesStructure);
+        validate: function (hlsListUrl) {
+          return (
+            hlsListUrlRegex(hlsListUrl) === true &&
+            uniqueValInUse({ id: this.id, type: this.type, name: 'hlsListUrl', value: hlsListUrl }) === false
+          );
         },
       },
     },
@@ -124,77 +69,82 @@
     inputLabels: 'buffer',
     inputs: 1,
     label: function () {
-      return this.name || this.uniqueName || 'mp4frag';
+      if (this.name) {
+        return this.name;
+      }
+      if (this.valid === false && this.validationErrors.includes('hlsListUrl')) {
+        return `/mp4frag/${this.id}/hls.m3u8`;
+      }
+      return `/mp4frag/${this.hlsListUrl}/hls.m3u8`;
     },
     outputLabels: 'status',
     outputs: 1,
     oneditprepare: function () {
-      // auto remove forbidden characters
-      const uniqueName = $('#node-input-uniqueName');
-      if (uniqueName.length) {
-        uniqueName.on('input', function () {
-          const newVal = this.value.replace(/[^a-z_]/gi, '');
+      $('#node-input-hlsListSize').typedInput({
+        types: [
+          {
+            value: 'num',
+            label: 'HLS List Size',
+            icon: 'fa fa-list-ol',
+            options: ['2', '3', '4', '5', '6', '7', '8', '9', '10'],
+          },
+        ],
+      });
+
+      $('#node-input-hlsListExtra').typedInput({
+        types: [
+          {
+            value: 'num',
+            label: 'HLS List Extra',
+            icon: 'fa fa-list-ol',
+            options: ['0', '1', '2', '3', '4'],
+          },
+        ],
+      });
+
+      const hlsListUrl = $('#node-input-hlsListUrl')
+        .attr({
+          placeholder: this.id,
+        })
+        .on('input', function () {
+          const newVal = this.value.replace(/[^a-z0-9_.]/gi, '');
           if (this.value !== newVal) {
             this.value = newVal;
           }
         });
+
+      if (hlsListUrl.val() === '') {
+        hlsListUrl.val(this.id);
       }
     },
+    oneditsave: function () {},
   });
 </script>
 
 <script data-template-name="mp4frag" type="text/html">
   <div class="form-row">
-    <label style="width:9rem;" for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-    <input style="width:auto;min-width:15rem" type="text" id="node-input-name" placeholder="Name" />
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name" placeholder="Name" />
   </div>
 
-  <div class="form-row">
-    <label style="width:9rem" for="node-input-hlsListSize"><i class="fa fa-list-ol"></i> HLS List Size</label>
-    <input
-      style="width:auto;min-width:15rem"
-      type="number"
-      id="node-input-hlsListSize"
-      placeholder="4"
-      min="2"
-      max="10"
-    />
-  </div>
+  <fieldset>
+    <legend>HLS List Options</legend>
 
-  <div class="form-row">
-    <label style="width:9rem;" for="node-input-uniqueName"><i class="fa fa-barcode"></i> Unique Name</label>
-    <input
-      style="width:auto;min-width:15rem"
-      type="text"
-      id="node-input-uniqueName"
-      placeholder="Letters_And_Underscores_Only"
-    />
-  </div>
-
-  <div class="form-row">
-    <label style="width:9rem" for="node-input-contextAccess"><i class="fa fa-database"></i> Context Access</label>
-    <select style="width:auto;min-width:15rem" id="node-input-contextAccess">
-      <option value="none">none</option>
-      <option value="flow">flow</option>
-      <option value="global">global</option>
-    </select>
-  </div>
-
-  <div class="form-row">
-    <label style="width:9rem" for="node-input-httpRoutes"><i class="fa fa-globe"></i> HTTP Routes</label>
-    <input style="width:auto" type="checkbox" id="node-input-httpRoutes" value="some" />
-  </div>
-
-  <div class="form-row" id="routesStructure">
-    <label style="width:9rem" for="node-input-routesStructure"><i class="fa fa-globe"></i> Routes Structure</label>
-    <select style="width:auto;min-width:15rem" id="node-input-routesStructure">
-      <option value="id_path" id="idPath">/mp4frag/{nodeID}/hls.m3u8</option>
-      <option value="unique_path" id="uniquePath">/mp4frag/{uniqueName}/hls.m3u8</option>
-    </select>
-    <div class="form-tips" style="margin-top:5px">
-      <code style="display:block;text-align:center" id="playlist"></code>
+    <div class="form-row">
+      <label for="node-input-hlsListSize"><i class="fa fa-list-ol"></i> Size</label>
+      <input id="node-input-hlsListSize" />
     </div>
-  </div>
+
+    <div class="form-row">
+      <label for="node-input-hlsListExtra"><i class="fa fa-list-ol"></i> Extra</label>
+      <input id="node-input-hlsListExtra" />
+    </div>
+
+    <div class="form-row">
+      <label for="node-input-hlsListUrl"><i class="fa fa-globe"></i> URL</label>
+      <code>/mp4frag/<input style="width:auto;text-align:center" type="text" id="node-input-hlsListUrl" />/hls.m3u8</code>
+    </div>
+  </fieldset>
 </script>
 
 <script data-help-name="mp4frag" type="text/html">

@@ -8,171 +8,127 @@ Mp4Frag.prototype.toString = function () {
 };
 
 module.exports = RED => {
-  // keep track of unique names
-  const uniqueNames = new Map();
+  // keep track of hlsListUrls
+  const hlsListUrlMap = new Map();
 
-  const uniqueNameRegex = /^(?:(?!^Change_This_Name$)[a-z_]){3,50}$/i;
+  const hlsListUrlRegex = /^[a-z0-9_.]{1,50}$/i;
 
-  // adds unique name and returns a function to delete unique name
-  const setUniqueName = (uniqueName, id) => {
-    if (uniqueName) {
-      if (uniqueNameRegex.test(uniqueName) === false) {
-        throw new Error(`invalid unique name ${uniqueName}`);
-      }
-
-      const item = uniqueNames.get(uniqueName);
-
-      if (item !== undefined && item !== id) {
-        throw new Error(`${uniqueName} already in use`);
-      }
-
-      uniqueNames.set(uniqueName, id);
-
-      return () => uniqueNames.delete(uniqueName);
-    }
-
-    return () => {};
-  };
-
-  // sets context and returns a function to unset context
-  const setContext = (context, contextAccess, uniqueName, mp4frag) => {
-    if (contextAccess !== 'none' && !uniqueName) {
-      throw new Error(`unique name needed for ${contextAccess} context`);
-    }
-
-    switch (contextAccess) {
-      case 'global':
-        const globalContext = context.global;
-
-        globalContext.set(uniqueName, mp4frag);
-
-        return () => globalContext.set(uniqueName, undefined);
-
-      case 'flow':
-        const flowContext = context.flow;
-
-        flowContext.set(uniqueName, mp4frag);
-
-        return () => flowContext.set(uniqueName, undefined);
-
-      default:
-        return () => {};
+  const testHlsListUrl = (id, hlsListUrl) => {
+    if (id !== hlsListUrl && hlsListUrlRegex.test(hlsListUrl) === false) {
+      throw new Error(`hlsListUrl "${hlsListUrl}" is invalid`);
     }
   };
 
-  // adds routes and returns a function to remove routes
-  const addRoutes = (id, uniqueName, httpRoutes, routesStructure, mp4frag) => {
-    if (httpRoutes === true) {
-      let pattern;
+  // add hlsListUrl to map and return function to remove item
+  const setHlsListUrl = (id, hlsListUrl) => {
+    const item = hlsListUrlMap.get(hlsListUrl);
 
-      if (routesStructure === 'id_path') {
-        pattern = `^\/mp4frag\/${id}/(?:(hls.m3u8)|hls([0-9]+).m4s|(init-hls.mp4)|(hls.m3u8.txt))$`;
-      } else if (uniqueName && routesStructure === 'unique_path') {
-        pattern = `^\/mp4frag\/${uniqueName}/(?:(hls.m3u8)|hls([0-9]+).m4s|(init-hls.mp4)|(hls.m3u8.txt))$`;
-      } else {
-        throw new Error(`invalid route`);
-      }
-
-      const regexp = new RegExp(pattern, 'i');
-
-      RED.httpNode.get(regexp, (req, res) => {
-        if (!mp4frag) {
-          return res.status(404).send(`${uniqueName} mp4frag not found`);
-        }
-
-        const { params } = req;
-
-        if (params[0]) {
-          const { m3u8 } = mp4frag;
-
-          if (m3u8) {
-            res.set('content-type', 'application/vnd.apple.mpegurl');
-
-            return res.send(m3u8);
-          }
-
-          return res.status(404).send(`${uniqueName} m3u8 playlist not found`);
-        }
-
-        if (params[1]) {
-          const sequence = params[1];
-
-          const segment = mp4frag.getHlsSegment(sequence);
-
-          if (segment) {
-            res.set('content-type', 'video/mp4');
-
-            return res.send(segment);
-          }
-
-          return res.status(404).send(`${uniqueName} segment ${sequence} not found`);
-        }
-
-        if (params[2]) {
-          const { initialization } = mp4frag;
-
-          if (initialization) {
-            res.set('content-type', 'video/mp4');
-
-            return res.send(initialization);
-          }
-
-          return res.status(404).send(`${uniqueName} initialization fragment not found`);
-        }
-
-        if (params[3]) {
-          const { m3u8 } = mp4frag;
-
-          if (m3u8) {
-            res.set('content-type', 'text/plain');
-
-            return res.send(m3u8);
-          }
-
-          return res.status(404).send(`${uniqueName} m3u8.txt playlist not found`);
-        }
-      });
-
-      return () => {
-        const { stack } = RED.httpNode._router;
-
-        for (let i = stack.length - 1; i >= 0; --i) {
-          const layer = stack[i];
-
-          if (layer.route && layer.route.path === regexp) {
-            stack.splice(i, 1);
-
-            break;
-          }
-        }
-      };
+    if (typeof item !== 'undefined' && item !== id) {
+      throw new Error(`hlsListUrl "${hlsListUrl}" is already in use`);
     }
 
-    return () => {};
+    hlsListUrlMap.set(hlsListUrl, id);
+
+    return () => hlsListUrlMap.delete(hlsListUrl);
+  };
+
+  // adds routes and returns a function to remove route
+  const addRoute = (hlsListUrl, mp4frag) => {
+    const pattern = `^\/mp4frag\/${hlsListUrl}/(?:(hls.m3u8)|hls([0-9]+).m4s|(init-hls.mp4)|(hls.m3u8.txt))$`;
+
+    const regexp = new RegExp(pattern, 'i');
+
+    RED.httpNode.get(regexp, (req, res) => {
+      if (!mp4frag) {
+        return res.status(404).send(`${hlsListUrl} mp4frag not found`);
+      }
+
+      const { params } = req;
+
+      if (params[0]) {
+        const { m3u8 } = mp4frag;
+
+        if (m3u8) {
+          res.set('content-type', 'application/vnd.apple.mpegurl');
+
+          return res.send(m3u8);
+        }
+
+        return res.status(404).send(`${hlsListUrl} m3u8 playlist not found`);
+      }
+
+      if (params[1]) {
+        const sequence = params[1];
+
+        const segment = mp4frag.getHlsSegment(sequence);
+
+        if (segment) {
+          res.set('content-type', 'video/mp4');
+
+          return res.send(segment);
+        }
+
+        return res.status(404).send(`${hlsListUrl} segment ${sequence} not found`);
+      }
+
+      if (params[2]) {
+        const { initialization } = mp4frag;
+
+        if (initialization) {
+          res.set('content-type', 'video/mp4');
+
+          return res.send(initialization);
+        }
+
+        return res.status(404).send(`${hlsListUrl} initialization fragment not found`);
+      }
+
+      if (params[3]) {
+        const { m3u8 } = mp4frag;
+
+        if (m3u8) {
+          res.set('content-type', 'text/plain');
+
+          return res.send(m3u8);
+        }
+
+        return res.status(404).send(`${hlsListUrl} m3u8.txt playlist not found`);
+      }
+    });
+
+    return () => {
+      const { stack } = RED.httpNode._router;
+
+      for (let i = stack.length - 1; i >= 0; --i) {
+        const layer = stack[i];
+
+        if (layer.route && layer.route.path === regexp) {
+          stack.splice(i, 1);
+
+          break;
+        }
+      }
+    };
   };
 
   function Mp4FragNode(config) {
     RED.nodes.createNode(this, config);
 
-    const { uniqueName, hlsListSize, contextAccess, httpRoutes, routesStructure } = config;
-
-    let mp4frag;
+    const { id, hlsListSize, hlsListExtra, hlsListUrl } = config;
 
     try {
+      // throws if fails regex
+      testHlsListUrl(id, hlsListUrl);
+
+      // throws if using trying duplicate hlsListUrl
+      const deleteHlsListUrl = setHlsListUrl(id, hlsListUrl);
+
       // mp4frag can throw if given bad hlsBase
-      mp4frag = new Mp4Frag({ hlsBase: 'hls', hlsListSize, hlsListInit: true });
+      const mp4frag = new Mp4Frag({ hlsBase: 'hls', hlsListSize, hlsListInit: true });
 
-      // throws if uniqueName already exists
-      const deleteUniqueName = setUniqueName(uniqueName, this.id);
+      const removeRoute = addRoute(hlsListUrl, mp4frag);
 
-      // throws if uniqueName not set while choosing routesStructure unique_path
-      const removeRoutes = addRoutes(this.id, uniqueName, httpRoutes, routesStructure, mp4frag);
-
-      // throws if uniqueName not set while choosing contextAccess flow or global
-      const unsetContext = setContext(this.context(), contextAccess, uniqueName, mp4frag);
-
-      const playlist =
-        routesStructure === 'id_path' ? `/mp4frag/${this.id}/hls.m3u8` : `/mp4frag/${uniqueName}/hls.m3u8`;
+      const playlist = `/mp4frag/${hlsListUrl}/hls.m3u8`;
 
       const onInitialized = data => {
         this.send({ topic: 'set_source', payload: playlist });
@@ -217,11 +173,9 @@ module.exports = RED => {
       };
 
       const onClose = (removed, done) => {
-        deleteUniqueName();
+        deleteHlsListUrl();
 
-        unsetContext();
-
-        removeRoutes();
+        removeRoute();
 
         mp4frag.resetCache();
 
@@ -258,7 +212,7 @@ module.exports = RED => {
 
       this.status({ fill: 'green', shape: 'ring', text: 'ready' });
     } catch (err) {
-      mp4frag && mp4frag.resetCache();
+      // mp4frag && mp4frag.resetCache();
 
       this.error(err);
 
