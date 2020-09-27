@@ -60,7 +60,7 @@ module.exports = RED => {
       if (params[1]) {
         const sequence = params[1];
 
-        const segment = mp4frag.getHlsSegment(sequence);
+        const segment = mp4frag.getSegmentNumber(sequence);
 
         if (segment) {
           res.set('content-type', 'video/mp4');
@@ -124,7 +124,7 @@ module.exports = RED => {
       const deleteHlsListUrl = setHlsListUrl(id, hlsListUrl);
 
       // mp4frag can throw if given bad hlsBase
-      const mp4frag = new Mp4Frag({ hlsBase: 'hls', hlsListSize, hlsListInit: true });
+      const mp4frag = new Mp4Frag({ hlsBase: 'hls', hlsListSize, hlsListExtra, hlsListInit: true });
 
       const removeRoute = addRoute(hlsListUrl, mp4frag);
 
