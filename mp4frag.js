@@ -131,12 +131,15 @@ module.exports = RED => {
       const playlist = `/mp4frag/${hlsListUrl}/hls.m3u8`;
 
       const onInitialized = data => {
-        this.send({ topic: 'set_source', payload: playlist });
+        // this.send({ topic: 'set_source', payload: playlist });
 
-        this.status({ fill: 'green', shape: 'dot', text: 'initialized' });
+        this.status({ fill: 'green', shape: 'dot', text: mp4frag.mime });
       };
 
       const onSegment = segment => {
+        if (mp4frag.sequence === 0) {
+          this.send({ topic: 'set_source', payload: playlist });
+        }
         this.status({ fill: 'green', shape: 'dot', text: `segment ${mp4frag.sequence}` });
       };
 
