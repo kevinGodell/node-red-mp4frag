@@ -3,6 +3,8 @@
 const Mp4Frag = require('mp4frag');
 
 module.exports = RED => {
+  const { _ } = RED;
+
   // keep track of hlsListUrls
   const hlsListUrlMap = new Map();
 
@@ -10,7 +12,7 @@ module.exports = RED => {
 
   const testHlsListUrl = (id, hlsListUrl) => {
     if (id !== hlsListUrl && hlsListUrlRegex.test(hlsListUrl) === false) {
-      throw new Error(`hlsListUrl "${hlsListUrl}" is invalid`);
+      throw new Error(_('mp4frag.error.hls_list_url_invalid', { hlsListUrl }));
     }
   };
 
@@ -19,7 +21,7 @@ module.exports = RED => {
     const item = hlsListUrlMap.get(hlsListUrl);
 
     if (typeof item !== 'undefined' && item !== id) {
-      throw new Error(`hlsListUrl "${hlsListUrl}" is already in use`);
+      throw new Error(_('mp4frag.error.hls_list_url_duplicate', { hlsListUrl }));
     }
 
     hlsListUrlMap.set(hlsListUrl, id);
@@ -35,7 +37,7 @@ module.exports = RED => {
 
     RED.httpNode.get(regexp, (req, res) => {
       if (!mp4frag) {
-        return res.status(404).send(`${hlsListUrl} mp4frag not found`);
+        return res.status(404).send(_('mp4frag.error.mp4frag_not_found', { hlsListUrl }));
       }
 
       const { params } = req;
@@ -49,7 +51,7 @@ module.exports = RED => {
           return res.send(m3u8);
         }
 
-        return res.status(404).send(`${hlsListUrl} m3u8 playlist not found`);
+        return res.status(404).send(_('mp4frag.error.m3u8_not_found', { hlsListUrl }));
       }
 
       if (params[1]) {
@@ -63,7 +65,7 @@ module.exports = RED => {
           return res.send(segment);
         }
 
-        return res.status(404).send(`${hlsListUrl} segment ${sequence} not found`);
+        return res.status(404).send(_('mp4frag.error.segment_not_found', { sequence, hlsListUrl }));
       }
 
       if (params[2]) {
@@ -75,7 +77,7 @@ module.exports = RED => {
           return res.send(initialization);
         }
 
-        return res.status(404).send(`${hlsListUrl} initialization fragment not found`);
+        return res.status(404).send(_('mp4frag.error.initialization_not_found', { hlsListUrl }));
       }
 
       if (params[3]) {
@@ -87,7 +89,7 @@ module.exports = RED => {
           return res.send(m3u8);
         }
 
-        return res.status(404).send(`${hlsListUrl} m3u8.txt playlist not found`);
+        return res.status(404).send(_('mp4frag.error.m3u8_not_found', { hlsListUrl }));
       }
     });
 
@@ -132,10 +134,11 @@ module.exports = RED => {
       };
 
       const onSegment = data => {
-        if (data.sequence === 0) {
+        const { sequence, duration } = data;
+        if (sequence === 0) {
           this.send({ topic: 'set_source', payload: playlist });
         }
-        this.status({ fill: 'green', shape: 'dot', text: `sequence: ${data.sequence}, duration: ${data.duration}` });
+        this.status({ fill: 'green', shape: 'dot', text: _('mp4frag.info.segment', { sequence, duration }) });
       };
 
       const onError = err => {

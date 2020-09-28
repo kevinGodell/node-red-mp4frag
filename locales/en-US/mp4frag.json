@@ -1,7 +1,15 @@
 {
   "mp4frag": {
+    "info": {
+      "segment": "sequence: __sequence__, duration: __duration__"
+    },
     "error": {
-      "no-group": "group not set"
+      "hls_list_url_invalid": "hlsListUrl \"__hlsListUrl__\" is invalid",
+      "hls_list_url_duplicate": "hlsListUrl \"__hlsListUrl__\" is already in use",
+      "mp4frag_not_found": "mp4frag not found for __hlsListUrl__",
+      "m3u8_not_found": "m3u8 playlist not found for __hlsListUrl__",
+      "segment_not_found": "segment __sequence__ not found for __hlsListUrl__",
+      "initialization_not_found": "initialization fragment not found for __hlsListUrl__"
     }
   }
 }
