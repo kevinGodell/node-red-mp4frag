@@ -5,27 +5,13 @@
    */
 
   // define magic numbers
-  const MAGIC = {
+  const MP4FRAG = {
     hlsListSizeDef: 4,
     hlsListSizeMin: 2,
     hlsListSizeMax: 10,
     hlsListExtraDef: 0,
     hlsListExtraMin: 0,
     hlsListExtraMax: 5,
-  };
-
-  // regex to match hlsListUrl allowed characters
-  const hlsListUrlRegex = RED.validators.regex(/^[a-z0-9_.]{1,50}$/i);
-
-  // check if other node already using unique value
-  const uniqueValInUse = obj => {
-    let exists = false;
-    RED.nodes.eachNode(function (node) {
-      if (node.id !== obj.id && node.type === obj.type && node[obj.name] === obj.value) {
-        exists = true;
-      }
-    });
-    return exists;
   };
 
   /*
@@ -41,28 +27,23 @@
         value: '',
       },
       hlsListSize: {
-        value: MAGIC.hlsListSizeDef,
+        value: MP4FRAG.hlsListSizeDef,
         required: true,
         validate: function (hlsListSize) {
-          return hlsListSize >= MAGIC.hlsListSizeMin && hlsListSize <= MAGIC.hlsListSizeMax;
+          return hlsListSize >= MP4FRAG.hlsListSizeMin && hlsListSize <= MP4FRAG.hlsListSizeMax;
         },
       },
       hlsListExtra: {
-        value: MAGIC.hlsListExtraDef,
+        value: MP4FRAG.hlsListExtraDef,
         required: true,
         validate: function (hlsListExtra) {
-          return hlsListExtra >= MAGIC.hlsListExtraMin && hlsListExtra <= MAGIC.hlsListExtraMax;
+          return hlsListExtra >= MP4FRAG.hlsListExtraMin && hlsListExtra <= MP4FRAG.hlsListExtraMax;
         },
       },
       hlsListUrl: {
         value: '',
         required: true,
-        validate: function (hlsListUrl) {
-          return (
-            hlsListUrlRegex(hlsListUrl) === true &&
-            uniqueValInUse({ id: this.id, type: this.type, name: 'hlsListUrl', value: hlsListUrl }) === false
-          );
-        },
+        validate: RED.validators.regex(/^[a-z0-9_.]{1,50}$/i),
       },
     },
     icon: 'font-awesome/fa-file-video-o',
