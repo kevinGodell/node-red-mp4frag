@@ -159,18 +159,18 @@ module.exports = RED => {
         // current method for resetting cache
         // grab exit code or signal from exec
         // cant just check (!code) because it could be 0 ???
-        if (code !== undefined || signal !== undefined) {
+        if (typeof code !== 'undefined' || typeof signal !== 'undefined') {
           mp4frag.resetCache();
 
           this.send({ topic: 'set_source', payload: '' });
 
-          return this.status({ fill: 'green', shape: 'ring', text: 'reset' });
+          return this.status({ fill: 'green', shape: 'ring', text: _('mp4frag.info.reset') });
         }
 
-        // temporarily log unknown payload as error for debugging
-        this.error(payload);
+        // temporarily log unknown payload as warning for debugging
+        this.warn(_('mp4frag.warning.unknown_payload', { payload }));
 
-        this.status({ fill: 'red', shape: 'dot', text: `unknown payload ${payload}` });
+        this.status({ fill: 'yellow', shape: 'dot', text: _('mp4frag.warning.unknown_payload', { payload }) });
       };
 
       const onClose = (removed, done) => {
@@ -193,9 +193,9 @@ module.exports = RED => {
         this.send({ topic: 'set_source', payload: '' });
 
         if (removed) {
-          this.status({ fill: 'red', shape: 'ring', text: 'removed' });
+          this.status({ fill: 'red', shape: 'ring', text: _('mp4frag.info.removed') });
         } else {
-          this.status({ fill: 'red', shape: 'dot', text: 'closed' });
+          this.status({ fill: 'red', shape: 'dot', text: _('mp4frag.info.closed') });
         }
 
         done();
@@ -211,7 +211,7 @@ module.exports = RED => {
 
       this.on('close', onClose);
 
-      this.status({ fill: 'green', shape: 'ring', text: 'ready' });
+      this.status({ fill: 'green', shape: 'ring', text: _('mp4frag.info.ready') });
     } catch (err) {
       // mp4frag && mp4frag.resetCache();
 

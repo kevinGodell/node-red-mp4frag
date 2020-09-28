@@ -1,15 +1,27 @@
 {
   "mp4frag": {
+    "label": {
+      "hls_list_size": "HLS List Size",
+      "hls_list_extra": "HLS List Extra"
+    },
     "info": {
+      "ready": "ready",
+      "removed": "removed",
+      "closed": "closed",
+      "reset": "reset",
       "segment": "sequence: __sequence__, duration: __duration__"
+    },
+    "success": {},
+    "warning": {
+      "unknown_payload": "unknown payload \"__payload__\""
     },
     "error": {
       "hls_list_url_invalid": "hlsListUrl \"__hlsListUrl__\" is invalid",
       "hls_list_url_duplicate": "hlsListUrl \"__hlsListUrl__\" is already in use",
-      "mp4frag_not_found": "mp4frag not found for __hlsListUrl__",
-      "m3u8_not_found": "m3u8 playlist not found for __hlsListUrl__",
-      "segment_not_found": "segment __sequence__ not found for __hlsListUrl__",
-      "initialization_not_found": "initialization fragment not found for __hlsListUrl__"
+      "mp4frag_not_found": "mp4frag not found for \"__hlsListUrl__\"",
+      "m3u8_not_found": "m3u8 playlist not found for \"__hlsListUrl__\"",
+      "segment_not_found": "segment __sequence__ not found for \"__hlsListUrl__\"",
+      "initialization_not_found": "initialization fragment not found for \"__hlsListUrl__\""
     }
   }
 }
