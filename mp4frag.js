@@ -174,6 +174,10 @@ module.exports = RED => {
       };
 
       const onClose = (removed, done) => {
+        this.off('input', onInput);
+
+        this.off('close', onClose);
+
         deleteHlsListUrl();
 
         removeRoute();
@@ -185,10 +189,6 @@ module.exports = RED => {
         mp4frag.off('segment', onSegment);
 
         mp4frag.off('error', onError);
-
-        this.off('input', onInput);
-
-        this.off('close', onClose);
 
         this.send({ topic: 'set_source', payload: '' });
 
