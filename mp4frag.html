@@ -103,9 +103,7 @@
       });
 
       const hlsListUrl = $('#node-input-hlsListUrl')
-        .attr({
-          placeholder: this.id,
-        })
+        .prop('placeholder', this.id)
         .on('input', function () {
           const newVal = this.value.replace(/[^a-z0-9_.]/gi, '');
           if (this.value !== newVal) {
