@@ -34,7 +34,8 @@
   "files": [
     "mp4frag.js",
     "mp4frag.html",
-    "locales/en-US/mp4frag.json"
+    "locales/en-US/mp4frag.json",
+    "flows/flows.json"
   ],
   "node-red": {
     "nodes": {
