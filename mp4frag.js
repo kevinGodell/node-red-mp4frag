@@ -2,11 +2,6 @@
 
 const Mp4Frag = require('mp4frag');
 
-// format data for context data menu
-Mp4Frag.prototype.toString = function () {
-  return `Mp4Frag({ hlsBase: '${this._hlsBase}', hlsListSize: ${this._hlsListSize} })`;
-};
-
 module.exports = RED => {
   // keep track of hlsListUrls
   const hlsListUrlMap = new Map();
@@ -133,7 +128,7 @@ module.exports = RED => {
       const onInitialized = data => {
         // this.send({ topic: 'set_source', payload: playlist });
 
-        this.status({ fill: 'green', shape: 'dot', text: mp4frag.mime });
+        this.status({ fill: 'green', shape: 'dot', text: data.mime });
       };
 
       const onSegment = data => {
