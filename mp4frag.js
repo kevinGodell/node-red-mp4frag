@@ -5,221 +5,246 @@ const Mp4Frag = require('mp4frag');
 module.exports = RED => {
   const { _ } = RED;
 
-  // keep track of hlsListUrls
-  const hlsListUrlMap = new Map();
+  const { createNode, registerType } = RED.nodes;
 
-  const hlsListUrlRegex = /^[a-z0-9_.]{1,50}$/i;
+  const NODE_TYPE = 'mp4frag';
 
-  const testHlsListUrl = (id, hlsListUrl) => {
-    if (id !== hlsListUrl && hlsListUrlRegex.test(hlsListUrl) === false) {
-      throw new Error(_('mp4frag.error.hls_list_url_invalid', { hlsListUrl }));
+  class Mp4fragNode {
+    constructor(config) {
+      createNode(this, config);
+
+      this.hlsListUrl = config.hlsListUrl;
+
+      this.hlsListSize = config.hlsListSize;
+
+      this.hlsListExtra = config.hlsListExtra;
+
+      try {
+        this.createPlaylist(); // throws
+
+        this.createMp4frag(); // throws
+
+        this.createRoute();
+
+        this.on('input', this.onInput);
+
+        this.on('close', this.onClose);
+
+        this.status({ fill: 'green', shape: 'ring', text: _('mp4frag.info.ready') });
+      } catch (err) {
+        this.error(err);
+
+        this.status({ fill: 'red', shape: 'dot', text: err.toString() });
+      }
     }
-  };
 
-  // add hlsListUrl to map and return function to remove item
-  const setHlsListUrl = (id, hlsListUrl) => {
-    const item = hlsListUrlMap.get(hlsListUrl);
+    createPlaylist() {
+      if (this.id !== this.hlsListUrl && Mp4fragNode.hlsListUrlRegex.test(this.hlsListUrl) === false) {
+        throw new Error(_('mp4frag.error.hls_list_url_invalid', { hlsListUrl: this.hlsListUrl }));
+      }
 
-    if (typeof item !== 'undefined' && item !== id) {
-      throw new Error(_('mp4frag.error.hls_list_url_duplicate', { hlsListUrl }));
+      const item = Mp4fragNode.hlsListUrlMap.get(this.hlsListUrl);
+
+      if (typeof item !== 'undefined' && item !== this.id) {
+        throw new Error(_('mp4frag.error.hls_list_url_duplicate', { hlsListUrl: this.hlsListUrl }));
+      }
+
+      Mp4fragNode.hlsListUrlMap.set(this.hlsListUrl, this.id);
+
+      this.playlist = `/mp4frag/${this.hlsListUrl}/hls.m3u8`;
     }
 
-    hlsListUrlMap.set(hlsListUrl, id);
+    destroyPlaylist() {
+      Mp4fragNode.hlsListUrlMap.delete(this.hlsListUrl);
 
-    return () => hlsListUrlMap.delete(hlsListUrl);
-  };
+      this.playlist = undefined;
+    }
 
-  // adds routes and returns a function to remove route
-  const addRoute = (hlsListUrl, mp4frag) => {
-    const pattern = `^\/mp4frag\/${hlsListUrl}/(?:(hls.m3u8)|hls([0-9]+).m4s|(init-hls.mp4)|(hls.m3u8.txt))$`;
+    createMp4frag() {
+      this.mp4frag = new Mp4Frag({
+        hlsBase: 'hls',
+        hlsListSize: this.hlsListSize,
+        hlsListExtra: this.hlsListExtra,
+        hlsListInit: true,
+      });
 
-    const regexp = new RegExp(pattern, 'i');
+      this.mp4fragEvents = {
+        initialized: this.mp4fragOn('initialized', data => this.onInitialized(data)),
+        segment: this.mp4fragOn('segment', data => this.onSegment(data)),
+        error: this.mp4fragOn('error', err => this.onError(err)),
+      };
+    }
 
-    RED.httpNode.get(regexp, (req, res) => {
-      if (!mp4frag) {
-        return res.status(404).send(_('mp4frag.error.mp4frag_not_found', { hlsListUrl }));
-      }
+    destroyMp4frag() {
+      this.mp4frag.off('initialized', this.mp4fragEvents.initialized);
 
-      const { params } = req;
+      this.mp4frag.off('segment', this.mp4fragEvents.segment);
 
-      if (params[0]) {
-        const { m3u8 } = mp4frag;
+      this.mp4frag.off('error', this.mp4fragEvents.error);
 
-        if (m3u8) {
-          res.set('content-type', 'application/vnd.apple.mpegurl');
+      this.mp4fragEvents = undefined;
 
-          return res.send(m3u8);
+      this.mp4frag.resetCache();
+
+      this.mp4frag = undefined;
+    }
+
+    mp4fragOn(type, func) {
+      this.mp4frag.on(type, func);
+
+      return func;
+    }
+
+    createRoute() {
+      const pattern = `^\/mp4frag\/${this.hlsListUrl}/(?:(hls.m3u8)|hls([0-9]+).m4s|(init-hls.mp4)|(hls.m3u8.txt))$`;
+
+      this.routePath = new RegExp(pattern, 'i');
+
+      RED.httpNode.get(this.routePath, (req, res) => {
+        if (typeof this.mp4frag === 'undefined') {
+          return res.status(404).send(_('mp4frag.error.mp4frag_not_found', { hlsListUrl: this.hlsListUrl }));
         }
 
-        return res.status(404).send(_('mp4frag.error.m3u8_not_found', { hlsListUrl }));
-      }
+        const { params } = req;
 
-      if (params[1]) {
-        const sequence = params[1];
+        if (params[0]) {
+          const { m3u8 } = this.mp4frag;
 
-        const segment = mp4frag.getSegment(sequence);
+          if (m3u8) {
+            res.set('content-type', 'application/vnd.apple.mpegurl');
 
-        if (segment) {
-          res.set('content-type', 'video/mp4');
+            return res.send(m3u8);
+          }
 
-          return res.send(segment);
+          return res.status(404).send(_('mp4frag.error.m3u8_not_found', { hlsListUrl: this.hlsListUrl }));
         }
 
-        return res.status(404).send(_('mp4frag.error.segment_not_found', { sequence, hlsListUrl }));
-      }
+        if (params[1]) {
+          const sequence = params[1];
 
-      if (params[2]) {
-        const { initialization } = mp4frag;
+          const segment = this.mp4frag.getSegment(sequence);
 
-        if (initialization) {
-          res.set('content-type', 'video/mp4');
+          if (segment) {
+            res.set('content-type', 'video/mp4');
 
-          return res.send(initialization);
+            return res.send(segment);
+          }
+
+          return res.status(404).send(_('mp4frag.error.segment_not_found', { sequence, hlsListUrl: this.hlsListUrl }));
         }
 
-        return res.status(404).send(_('mp4frag.error.initialization_not_found', { hlsListUrl }));
-      }
+        if (params[2]) {
+          const { initialization } = this.mp4frag;
 
-      if (params[3]) {
-        const { m3u8 } = mp4frag;
+          if (initialization) {
+            res.set('content-type', 'video/mp4');
 
-        if (m3u8) {
-          res.set('content-type', 'text/plain');
+            return res.send(initialization);
+          }
 
-          return res.send(m3u8);
+          return res.status(404).send(_('mp4frag.error.initialization_not_found', { hlsListUrl: this.hlsListUrl }));
         }
 
-        return res.status(404).send(_('mp4frag.error.m3u8_not_found', { hlsListUrl }));
-      }
-    });
+        if (params[3]) {
+          const { m3u8 } = this.mp4frag;
 
-    return () => {
+          if (m3u8) {
+            res.set('content-type', 'text/plain');
+
+            return res.send(m3u8);
+          }
+
+          return res.status(404).send(_('mp4frag.error.m3u8_not_found', { hlsListUrl: this.hlsListUrl }));
+        }
+      });
+    }
+
+    destroyRoute() {
       const { stack } = RED.httpNode._router;
 
       for (let i = stack.length - 1; i >= 0; --i) {
         const layer = stack[i];
 
-        if (layer.route && layer.route.path === regexp) {
+        if (layer.route && layer.route.path === this.routePath) {
           stack.splice(i, 1);
 
           break;
         }
       }
-    };
-  };
+    }
 
-  function Mp4FragNode(config) {
-    RED.nodes.createNode(this, config);
+    onInput(msg) {
+      const { payload } = msg;
 
-    const { id, hlsListSize, hlsListExtra, hlsListUrl } = config;
+      if (Buffer.isBuffer(payload) === true) {
+        return this.mp4frag.write(payload);
+      }
 
-    try {
-      // throws if fails regex
-      testHlsListUrl(id, hlsListUrl);
+      const { code, signal } = payload;
 
-      // throws if using trying duplicate hlsListUrl
-      const deleteHlsListUrl = setHlsListUrl(id, hlsListUrl);
-
-      // mp4frag can throw if given bad hlsBase
-      const mp4frag = new Mp4Frag({ hlsBase: 'hls', hlsListSize, hlsListExtra, hlsListInit: true });
-
-      const removeRoute = addRoute(hlsListUrl, mp4frag);
-
-      const playlist = `/mp4frag/${hlsListUrl}/hls.m3u8`;
-
-      const onInitialized = data => {
-        // this.send({ topic: 'set_source', payload: playlist });
-
-        this.status({ fill: 'green', shape: 'dot', text: data.mime });
-      };
-
-      const onSegment = data => {
-        const { sequence, duration } = data;
-        if (sequence === 0) {
-          this.send({ topic: 'set_source', payload: playlist });
-        }
-        this.status({ fill: 'green', shape: 'dot', text: _('mp4frag.info.segment', { sequence, duration }) });
-      };
-
-      const onError = err => {
-        this.error(err);
-
-        this.status({ fill: 'red', shape: 'dot', text: err.toString() });
-      };
-
-      const onInput = msg => {
-        const { payload } = msg;
-
-        if (Buffer.isBuffer(payload) === true) {
-          return mp4frag.write(payload);
-        }
-
-        const { code, signal } = payload;
-
-        // current method for resetting cache
-        // grab exit code or signal from exec
-        // cant just check (!code) because it could be 0 ???
-        if (typeof code !== 'undefined' || typeof signal !== 'undefined') {
-          mp4frag.resetCache();
-
-          this.send({ topic: 'set_source', payload: '' });
-
-          return this.status({ fill: 'green', shape: 'ring', text: _('mp4frag.info.reset') });
-        }
-
-        // temporarily log unknown payload as warning for debugging
-        this.warn(_('mp4frag.warning.unknown_payload', { payload }));
-
-        this.status({ fill: 'yellow', shape: 'dot', text: _('mp4frag.warning.unknown_payload', { payload }) });
-      };
-
-      const onClose = (removed, done) => {
-        this.off('input', onInput);
-
-        this.off('close', onClose);
-
-        deleteHlsListUrl();
-
-        removeRoute();
-
-        mp4frag.resetCache();
-
-        mp4frag.off('initialized', onInitialized);
-
-        mp4frag.off('segment', onSegment);
-
-        mp4frag.off('error', onError);
+      // current method for resetting cache
+      // grab exit code or signal from exec
+      // cant just check (!code) because it could be 0 ???
+      if (typeof code !== 'undefined' || typeof signal !== 'undefined') {
+        this.mp4frag.resetCache();
 
         this.send({ topic: 'set_source', payload: '' });
 
-        if (removed) {
-          this.status({ fill: 'red', shape: 'ring', text: _('mp4frag.info.removed') });
-        } else {
-          this.status({ fill: 'red', shape: 'dot', text: _('mp4frag.info.closed') });
-        }
+        return this.status({ fill: 'green', shape: 'ring', text: _('mp4frag.info.reset') });
+      }
 
-        done();
-      };
+      // temporarily log unknown payload as warning for debugging
+      this.warn(_('mp4frag.warning.unknown_payload', { payload }));
 
-      mp4frag.on('initialized', onInitialized);
+      this.status({ fill: 'yellow', shape: 'dot', text: _('mp4frag.warning.unknown_payload', { payload }) });
+    }
 
-      mp4frag.on('segment', onSegment);
+    onClose(removed, done) {
+      this.removeListener('input', this.onInput);
 
-      mp4frag.on('error', onError);
+      this.removeListener('close', this.onClose);
 
-      this.on('input', onInput);
+      this.destroyRoute();
 
-      this.on('close', onClose);
+      this.destroyMp4frag();
 
-      this.status({ fill: 'green', shape: 'ring', text: _('mp4frag.info.ready') });
-    } catch (err) {
-      // mp4frag && mp4frag.resetCache();
+      this.destroyPlaylist();
 
+      this.send({ topic: 'set_source', payload: '' });
+
+      if (removed) {
+        this.status({ fill: 'red', shape: 'ring', text: _('mp4frag.info.removed') });
+      } else {
+        this.status({ fill: 'red', shape: 'dot', text: _('mp4frag.info.closed') });
+      }
+
+      done();
+    }
+
+    onInitialized(data) {
+      this.status({ fill: 'green', shape: 'dot', text: data.mime });
+    }
+
+    onSegment(data) {
+      const { sequence, duration } = data;
+
+      if (sequence === 0) {
+        this.send({ topic: 'set_source', payload: this.playlist });
+      }
+
+      this.status({ fill: 'green', shape: 'dot', text: _('mp4frag.info.segment', { sequence, duration }) });
+    }
+
+    onError(err) {
       this.error(err);
 
       this.status({ fill: 'red', shape: 'dot', text: err.toString() });
     }
   }
 
-  RED.nodes.registerType('mp4frag', Mp4FragNode);
+  Mp4fragNode.hlsListUrlMap = new Map();
+
+  Mp4fragNode.hlsListUrlRegex = /^[a-z0-9_.]{1,50}$/i;
+
+  registerType(NODE_TYPE, Mp4fragNode);
 };
