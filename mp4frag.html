@@ -1,9 +1,4 @@
 <script type="text/javascript">
-  /*
-   globally scoped vars and funcs in admin screen?
-   or is scoped to only our nodes?
-   */
-
   // define magic numbers
   const MP4FRAG = {
     hlsListSizeDef: 4,
@@ -14,10 +9,7 @@
     hlsListExtraMax: 5,
   };
 
-  /*
-    register node
-   */
-
+  // register node
   RED.nodes.registerType('mp4frag', {
     align: 'left',
     category: 'cctv',
