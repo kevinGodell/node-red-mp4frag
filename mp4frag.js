@@ -111,15 +111,13 @@ module.exports = RED => {
           const { m3u8 } = this.mp4frag;
 
           if (m3u8) {
-            // todo no cache headers
-
             res.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
 
             res.set('Expires', '-1');
 
             res.set('Pragma', 'no-cache');
 
-            res.set('Content-Type', 'application/vnd.apple.mpegurl');
+            res.type('m3u8');
 
             return res.send(m3u8);
           }
@@ -133,7 +131,9 @@ module.exports = RED => {
           const segment = this.mp4frag.getSegment(sequence);
 
           if (segment) {
-            res.set('content-type', 'video/mp4');
+            // res.type('m4s'); <-- not yet supported, filed issue https://github.com/jshttp/mime-db/issues/216
+
+            res.set('Content-Type', 'video/iso.segment');
 
             return res.send(segment);
           }
@@ -145,7 +145,7 @@ module.exports = RED => {
           const { initialization } = this.mp4frag;
 
           if (initialization) {
-            res.set('content-type', 'video/mp4');
+            res.type('mp4');
 
             return res.send(initialization);
           }
@@ -157,7 +157,7 @@ module.exports = RED => {
           const { m3u8 } = this.mp4frag;
 
           if (m3u8) {
-            res.set('content-type', 'text/plain');
+            res.type('txt');
 
             return res.send(m3u8);
           }
