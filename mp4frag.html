@@ -87,6 +87,12 @@
       if (hlsPlaylistUrl.val() === '') {
         hlsPlaylistUrl.val(this.id);
       }
+
+      $('<button type="button" class="red-ui-button red-ui-button-small"><i class="fa fa-book"></i> help</button>')
+        .on('click', () => {
+          RED.sidebar.help.show('ui_mp4frag');
+        })
+        .appendTo($('div.red-ui-tray-footer'));
     },
     oneditsave: function () {},
   });
