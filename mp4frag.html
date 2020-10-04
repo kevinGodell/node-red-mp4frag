@@ -1,12 +1,12 @@
 <script type="text/javascript">
   // define magic numbers
   const MP4FRAG = {
-    hlsListSizeDef: 4,
-    hlsListSizeMin: 2,
-    hlsListSizeMax: 10,
-    hlsListExtraDef: 0,
-    hlsListExtraMin: 0,
-    hlsListExtraMax: 5,
+    hlsPlaylistSizeDef: 4,
+    hlsPlaylistSizeMin: 2,
+    hlsPlaylistSizeMax: 10,
+    hlsPlaylistExtraDef: 0,
+    hlsPlaylistExtraMin: 0,
+    hlsPlaylistExtraMax: 5,
   };
 
   // register node
@@ -18,21 +18,21 @@
       name: {
         value: '',
       },
-      hlsListSize: {
-        value: MP4FRAG.hlsListSizeDef,
+      hlsPlaylistSize: {
+        value: MP4FRAG.hlsPlaylistSizeDef,
         required: true,
-        validate: function (hlsListSize) {
-          return hlsListSize >= MP4FRAG.hlsListSizeMin && hlsListSize <= MP4FRAG.hlsListSizeMax;
+        validate: function (hlsPlaylistSize) {
+          return hlsPlaylistSize >= MP4FRAG.hlsPlaylistSizeMin && hlsPlaylistSize <= MP4FRAG.hlsPlaylistSizeMax;
         },
       },
-      hlsListExtra: {
-        value: MP4FRAG.hlsListExtraDef,
+      hlsPlaylistExtra: {
+        value: MP4FRAG.hlsPlaylistExtraDef,
         required: true,
-        validate: function (hlsListExtra) {
-          return hlsListExtra >= MP4FRAG.hlsListExtraMin && hlsListExtra <= MP4FRAG.hlsListExtraMax;
+        validate: function (hlsPlaylistExtra) {
+          return hlsPlaylistExtra >= MP4FRAG.hlsPlaylistExtraMin && hlsPlaylistExtra <= MP4FRAG.hlsPlaylistExtraMax;
         },
       },
-      hlsListUrl: {
+      hlsPlaylistUrl: {
         value: '',
         required: true,
         validate: RED.validators.regex(/^[a-z0-9_.]{1,50}$/i),
@@ -45,15 +45,15 @@
       if (this.name) {
         return this.name;
       }
-      if (this.valid === false && this.validationErrors.includes('hlsListUrl')) {
+      if (this.valid === false && this.validationErrors.includes('hlsPlaylistUrl')) {
         return `/mp4frag/${this.id}/hls.m3u8`;
       }
-      return `/mp4frag/${this.hlsListUrl}/hls.m3u8`;
+      return `/mp4frag/${this.hlsPlaylistUrl}/hls.m3u8`;
     },
     outputLabels: 'status',
     outputs: 1,
     oneditprepare: function () {
-      $('#node-input-hlsListSize').typedInput({
+      $('#node-input-hlsPlaylistSize').typedInput({
         types: [
           {
             value: 'num',
@@ -64,7 +64,7 @@
         ],
       });
 
-      $('#node-input-hlsListExtra').typedInput({
+      $('#node-input-hlsPlaylistExtra').typedInput({
         types: [
           {
             value: 'num',
@@ -75,7 +75,7 @@
         ],
       });
 
-      const hlsListUrl = $('#node-input-hlsListUrl')
+      const hlsPlaylistUrl = $('#node-input-hlsPlaylistUrl')
         .prop('placeholder', this.id)
         .on('input', function () {
           const newVal = this.value.replace(/[^a-z0-9_.]/gi, '');
@@ -84,8 +84,8 @@
           }
         });
 
-      if (hlsListUrl.val() === '') {
-        hlsListUrl.val(this.id);
+      if (hlsPlaylistUrl.val() === '') {
+        hlsPlaylistUrl.val(this.id);
       }
     },
     oneditsave: function () {},
@@ -99,27 +99,48 @@
   </div>
 
   <fieldset>
-    <legend>HLS List Options</legend>
+    <legend>HLS Playlist Options</legend>
 
     <div class="form-row">
-      <label for="node-input-hlsListSize"><i class="fa fa-list-ol"></i> Size</label>
-      <input id="node-input-hlsListSize" />
+      <label for="node-input-hlsPlaylistSize"><i class="fa fa-list-ol"></i> Size</label>
+      <input id="node-input-hlsPlaylistSize" />
     </div>
 
     <div class="form-row">
-      <label for="node-input-hlsListExtra"><i class="fa fa-list-ol"></i> Extra</label>
-      <input id="node-input-hlsListExtra" />
+      <label for="node-input-hlsPlaylistExtra"><i class="fa fa-list-ol"></i> Extra</label>
+      <input id="node-input-hlsPlaylistExtra" />
     </div>
 
     <div class="form-row">
-      <label for="node-input-hlsListUrl"><i class="fa fa-globe"></i> URL</label>
-      <code>
-        /mp4frag/<input style="width:auto;text-align:center;" type="text" id="node-input-hlsListUrl" />/hls.m3u8
-      </code>
+      <label for="node-input-hlsPlaylistUrl"><i class="fa fa-globe"></i> URL</label>
+      <code> /mp4frag/<input style="width:auto;text-align:center;" type="text" id="node-input-hlsPlaylistUrl" />/hls.m3u8 </code>
     </div>
   </fieldset>
 </script>
 
 <script data-help-name="mp4frag" type="text/html">
-  <p>Parse and serve a fragmented mp4 from a buffer.</p>
+  <h2>Parse a fragmented mp4 from a buffer and serve it as HLS.</h2>
+  <p>
+    After successfully parsing a fragmented mp4 from a buffer,
+    it will send a msg containing the HLS Playlist in the payload.
+    <code>{ payload: '/mp4frag/example/hls.m3u8' }</code>
+  </p>
+  <p>
+    The HLS Playlist can be consumed by an app such as VLC,
+    a video player library such as HLS.js,
+    or natively in the Safari browser.
+  </p>
+  <h3>HLS Playlist Size</h3>
+  <p>The number of segments to keep referenced inside the playlist.</p>
+  <h3>HLS Playlist Extra</h3>
+  <p>
+    The number of extra segments to keep in memory beyond the playlist.
+    This can be helpful if the video player runs behind and tries to
+    access a segment that is no longer referenced in the playlist.
+  </p>
+  <h3>HLS Playlist URL</h3>
+  <p>
+    Choose a unique path for creating the http route to serve the HLS files,
+    including the playlist, initialization fragment, and media segments.
+  </p>
 </script>
