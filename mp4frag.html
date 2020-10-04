@@ -119,5 +119,28 @@
 </script>
 
 <script data-help-name="mp4frag" type="text/html">
-  <p>Parse and serve a fragmented mp4 from a buffer.</p>
+  <h2>Parse a fragmented mp4 from a buffer and serve it as HLS.</h2>
+  <p>
+    After successfully parsing a fragmented mp4 from a buffer,
+    it will send a msg containing the HLS Playlist in the payload.
+    <code>{ payload: '/mp4frag/example/hls.m3u8' }</code>
+  </p>
+  <p>
+    The HLS Playlist can be consumed by an app such as VLC,
+    a video player library such as HLS.js,
+    or natively in the Safari browser.
+  </p>
+  <h3>HLS Playlist Size</h3>
+  <p>The number of segments to keep referenced inside the playlist.</p>
+  <h3>HLS Playlist Extra</h3>
+  <p>
+    The number of extra segments to keep in memory beyond the playlist.
+    This can be helpful if the video player runs behind and tries to
+    access a segment that is no longer referenced in the playlist.
+  </p>
+  <h3>HLS Playlist URL</h3>
+  <p>
+    Choose a unique path for creating the http route to serve the HLS files,
+    including the playlist, initialization fragment, and media segments.
+  </p>
 </script>
