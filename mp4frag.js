@@ -13,11 +13,11 @@ module.exports = RED => {
     constructor(config) {
       createNode(this, config);
 
-      this.hlsListUrl = config.hlsListUrl;
+      this.hlsPlaylistUrl = config.hlsPlaylistUrl;
 
-      this.hlsListSize = config.hlsListSize;
+      this.hlsPlaylistSize = config.hlsPlaylistSize;
 
-      this.hlsListExtra = config.hlsListExtra;
+      this.hlsPlaylistExtra = config.hlsPlaylistExtra;
 
       try {
         this.createPlaylist(); // throws
@@ -39,33 +39,33 @@ module.exports = RED => {
     }
 
     createPlaylist() {
-      if (this.id !== this.hlsListUrl && Mp4fragNode.hlsListUrlRegex.test(this.hlsListUrl) === false) {
-        throw new Error(_('mp4frag.error.hls_list_url_invalid', { hlsListUrl: this.hlsListUrl }));
+      if (this.id !== this.hlsPlaylistUrl && Mp4fragNode.hlsPlaylistUrlRegex.test(this.hlsPlaylistUrl) === false) {
+        throw new Error(_('mp4frag.error.hls_playlist_url_invalid', { hlsPlaylistUrl: this.hlsPlaylistUrl }));
       }
 
-      const item = Mp4fragNode.hlsListUrlMap.get(this.hlsListUrl);
+      const item = Mp4fragNode.hlsPlaylistUrlMap.get(this.hlsPlaylistUrl);
 
       if (typeof item !== 'undefined' && item !== this.id) {
-        throw new Error(_('mp4frag.error.hls_list_url_duplicate', { hlsListUrl: this.hlsListUrl }));
+        throw new Error(_('mp4frag.error.hls_playlist_url_duplicate', { hlsPlaylistUrl: this.hlsPlaylistUrl }));
       }
 
-      Mp4fragNode.hlsListUrlMap.set(this.hlsListUrl, this.id);
+      Mp4fragNode.hlsPlaylistUrlMap.set(this.hlsPlaylistUrl, this.id);
 
-      this.playlist = `/mp4frag/${this.hlsListUrl}/hls.m3u8`;
+      this.hlsPlaylist = `/mp4frag/${this.hlsPlaylistUrl}/hls.m3u8`;
     }
 
     destroyPlaylist() {
-      Mp4fragNode.hlsListUrlMap.delete(this.hlsListUrl);
+      Mp4fragNode.hlsPlaylistUrlMap.delete(this.hlsPlaylistUrl);
 
-      this.playlist = undefined;
+      this.hlsPlaylist = undefined;
     }
 
     createMp4frag() {
       this.mp4frag = new Mp4Frag({
-        hlsBase: 'hls',
-        hlsListSize: this.hlsListSize,
-        hlsListExtra: this.hlsListExtra,
-        hlsListInit: true,
+        hlsPlaylistBase: 'hls',
+        hlsPlaylistSize: this.hlsPlaylistSize,
+        hlsPlaylistExtra: this.hlsPlaylistExtra,
+        hlsPlaylistInit: true,
       });
 
       this.mp4fragEvents = {
@@ -96,13 +96,13 @@ module.exports = RED => {
     }
 
     createRoute() {
-      const pattern = `^\/mp4frag\/${this.hlsListUrl}/(?:(hls.m3u8)|hls([0-9]+).m4s|(init-hls.mp4)|(hls.m3u8.txt))$`;
+      const pattern = `^\/mp4frag\/${this.hlsPlaylistUrl}/(?:(hls.m3u8)|hls([0-9]+).m4s|(init-hls.mp4)|(hls.m3u8.txt))$`;
 
       this.routePath = new RegExp(pattern, 'i');
 
       RED.httpNode.get(this.routePath, (req, res) => {
         if (typeof this.mp4frag === 'undefined') {
-          return res.status(404).send(_('mp4frag.error.mp4frag_not_found', { hlsListUrl: this.hlsListUrl }));
+          return res.status(404).send(_('mp4frag.error.mp4frag_not_found', { hlsPlaylistUrl: this.hlsPlaylistUrl }));
         }
 
         const { params } = req;
@@ -111,12 +111,20 @@ module.exports = RED => {
           const { m3u8 } = this.mp4frag;
 
           if (m3u8) {
-            res.set('content-type', 'application/vnd.apple.mpegurl');
+            // todo no cache headers
+
+            res.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+
+            res.set('Expires', '-1');
+
+            res.set('Pragma', 'no-cache');
+
+            res.set('Content-Type', 'application/vnd.apple.mpegurl');
 
             return res.send(m3u8);
           }
 
-          return res.status(404).send(_('mp4frag.error.m3u8_not_found', { hlsListUrl: this.hlsListUrl }));
+          return res.status(404).send(_('mp4frag.error.m3u8_not_found', { hlsPlaylistUrl: this.hlsPlaylistUrl }));
         }
 
         if (params[1]) {
@@ -130,7 +138,7 @@ module.exports = RED => {
             return res.send(segment);
           }
 
-          return res.status(404).send(_('mp4frag.error.segment_not_found', { sequence, hlsListUrl: this.hlsListUrl }));
+          return res.status(404).send(_('mp4frag.error.segment_not_found', { sequence, hlsPlaylistUrl: this.hlsPlaylistUrl }));
         }
 
         if (params[2]) {
@@ -142,7 +150,7 @@ module.exports = RED => {
             return res.send(initialization);
           }
 
-          return res.status(404).send(_('mp4frag.error.initialization_not_found', { hlsListUrl: this.hlsListUrl }));
+          return res.status(404).send(_('mp4frag.error.initialization_not_found', { hlsPlaylistUrl: this.hlsPlaylistUrl }));
         }
 
         if (params[3]) {
@@ -154,7 +162,7 @@ module.exports = RED => {
             return res.send(m3u8);
           }
 
-          return res.status(404).send(_('mp4frag.error.m3u8_not_found', { hlsListUrl: this.hlsListUrl }));
+          return res.status(404).send(_('mp4frag.error.m3u8_not_found', { hlsPlaylistUrl: this.hlsPlaylistUrl }));
         }
       });
     }
@@ -188,7 +196,7 @@ module.exports = RED => {
       if (typeof code !== 'undefined' || typeof signal !== 'undefined') {
         this.mp4frag.resetCache();
 
-        this.send({ topic: 'set_source', payload: '' });
+        this.send({ /* topic: 'set_source', */ payload: '' });
 
         return this.status({ fill: 'green', shape: 'ring', text: _('mp4frag.info.reset') });
       }
@@ -210,7 +218,7 @@ module.exports = RED => {
 
       this.destroyPlaylist();
 
-      this.send({ topic: 'set_source', payload: '' });
+      this.send({ /* topic: 'set_source', */ payload: '' });
 
       if (removed) {
         this.status({ fill: 'red', shape: 'ring', text: _('mp4frag.info.removed') });
@@ -229,7 +237,7 @@ module.exports = RED => {
       const { sequence, duration } = data;
 
       if (sequence === 0) {
-        this.send({ topic: 'set_source', payload: this.playlist });
+        this.send({ /* topic: 'set_source', */ payload: this.hlsPlaylist });
       }
 
       this.status({ fill: 'green', shape: 'dot', text: _('mp4frag.info.segment', { sequence, duration }) });
@@ -242,9 +250,9 @@ module.exports = RED => {
     }
   }
 
-  Mp4fragNode.hlsListUrlMap = new Map();
+  Mp4fragNode.hlsPlaylistUrlMap = new Map();
 
-  Mp4fragNode.hlsListUrlRegex = /^[a-z0-9_.]{1,50}$/i;
+  Mp4fragNode.hlsPlaylistUrlRegex = /^[a-z0-9_.]{1,50}$/i;
 
   registerType(NODE_TYPE, Mp4fragNode);
 };
