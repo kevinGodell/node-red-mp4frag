@@ -133,6 +133,8 @@ module.exports = RED => {
           if (segment) {
             // res.type('m4s'); <-- not yet supported, filed issue https://github.com/jshttp/mime-db/issues/216
 
+            // res.type('mp4');
+
             res.set('Content-Type', 'video/iso.segment');
 
             return res.send(segment);
