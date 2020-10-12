@@ -32,7 +32,7 @@
           return hlsPlaylistExtra >= MP4FRAG.hlsPlaylistExtraMin && hlsPlaylistExtra <= MP4FRAG.hlsPlaylistExtraMax;
         },
       },
-      hlsPlaylistUrl: {
+      basePath: {
         value: '',
         required: true,
         validate: RED.validators.regex(/^[a-z0-9_.]{1,50}$/i),
@@ -45,10 +45,10 @@
       if (this.name) {
         return this.name;
       }
-      if (this.valid === false && this.validationErrors.includes('hlsPlaylistUrl')) {
+      if (this.valid === false && this.validationErrors.includes('basePath')) {
         return `/mp4frag/${this.id}/hls.m3u8`;
       }
-      return `/mp4frag/${this.hlsPlaylistUrl}/hls.m3u8`;
+      return `/mp4frag/${this.basePath}/hls.m3u8`;
     },
     outputLabels: 'status',
     outputs: 1,
@@ -75,7 +75,7 @@
         ],
       });
 
-      const hlsPlaylistUrl = $('#node-input-hlsPlaylistUrl')
+      const basePath = $('#node-input-basePath')
         .prop('placeholder', this.id)
         .on('input', function () {
           const newVal = this.value.replace(/[^a-z0-9_.]/gi, '');
@@ -84,8 +84,8 @@
           }
         });
 
-      if (hlsPlaylistUrl.val() === '') {
-        hlsPlaylistUrl.val(this.id);
+      if (basePath.val() === '') {
+        basePath.val(this.id);
       }
 
       $('<button type="button" class="red-ui-button red-ui-button-small"><i class="fa fa-book"></i> help</button>')
@@ -118,8 +118,8 @@
     </div>
 
     <div class="form-row">
-      <label for="node-input-hlsPlaylistUrl"><i class="fa fa-globe"></i> URL</label>
-      <code> /mp4frag/<input style="width:auto;text-align:center;" type="text" id="node-input-hlsPlaylistUrl" />/hls.m3u8 </code>
+      <label for="node-input-basePath"><i class="fa fa-globe"></i> URL</label>
+      <code> /mp4frag/<input style="width:auto;text-align:center;" type="text" id="node-input-basePath" />/{resource} </code>
     </div>
   </fieldset>
 </script>

@@ -16,12 +16,12 @@
       "unknown_payload": "unknown payload \"__payload__\""
     },
     "error": {
-      "hls_playlist_url_invalid": "hlsPlaylistUrl \"__hlsPlaylistUrl__\" is invalid",
-      "hls_playlist_url_duplicate": "hlsPlaylistUrl \"__hlsPlaylistUrl__\" is already in use",
-      "mp4frag_not_found": "mp4frag not found for \"__hlsPlaylistUrl__\"",
-      "m3u8_not_found": "m3u8 playlist not found for \"__hlsPlaylistUrl__\"",
-      "segment_not_found": "segment __sequence__ not found for \"__hlsPlaylistUrl__\"",
-      "initialization_not_found": "initialization fragment not found for \"__hlsPlaylistUrl__\""
+      "base_path_invalid": "basePath \"__basePath__\" is invalid",
+      "base_path_duplicate": "basePath \"__basePath__\" is already in use",
+      "mp4frag_not_found": "mp4frag not found for \"__basePath__\"",
+      "m3u8_not_found": "m3u8 playlist not found for \"__basePath__\"",
+      "segment_not_found": "segment __sequence__ not found for \"__basePath__\"",
+      "initialization_not_found": "initialization fragment not found for \"__basePath__\""
     }
   }
 }

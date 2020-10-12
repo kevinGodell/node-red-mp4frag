@@ -1,9 +1,11 @@
 'use strict';
 
+const socketIO = require('socket.io');
+
 const Mp4Frag = require('mp4frag');
 
 module.exports = RED => {
-  const { _ } = RED;
+  const { server, _ } = RED;
 
   const { createNode, registerType } = RED.nodes;
 
@@ -13,18 +15,20 @@ module.exports = RED => {
     constructor(config) {
       createNode(this, config);
 
-      this.hlsPlaylistUrl = config.hlsPlaylistUrl;
+      this.basePath = config.basePath;
 
       this.hlsPlaylistSize = config.hlsPlaylistSize;
 
       this.hlsPlaylistExtra = config.hlsPlaylistExtra;
 
       try {
-        this.createPlaylist(); // throws
+        this.createPaths(); // throws
 
         this.createMp4frag(); // throws
 
-        this.createRoute();
+        this.createHttpRoute();
+
+        this.createSocketServer();
 
         this.on('input', this.onInput);
 
@@ -38,26 +42,30 @@ module.exports = RED => {
       }
     }
 
-    createPlaylist() {
-      if (this.id !== this.hlsPlaylistUrl && Mp4fragNode.hlsPlaylistUrlRegex.test(this.hlsPlaylistUrl) === false) {
-        throw new Error(_('mp4frag.error.hls_playlist_url_invalid', { hlsPlaylistUrl: this.hlsPlaylistUrl }));
+    createPaths() {
+      if (this.id !== this.basePath && Mp4fragNode.basePathRegex.test(this.basePath) === false) {
+        throw new Error(_('mp4frag.error.base_path_invalid', { basePath: this.basePath }));
       }
 
-      const item = Mp4fragNode.hlsPlaylistUrlMap.get(this.hlsPlaylistUrl);
+      const item = Mp4fragNode.basePathMap.get(this.basePath);
 
       if (typeof item !== 'undefined' && item !== this.id) {
-        throw new Error(_('mp4frag.error.hls_playlist_url_duplicate', { hlsPlaylistUrl: this.hlsPlaylistUrl }));
+        throw new Error(_('mp4frag.error.base_path_duplicate', { basePath: this.basePath }));
       }
 
-      Mp4fragNode.hlsPlaylistUrlMap.set(this.hlsPlaylistUrl, this.id);
+      Mp4fragNode.basePathMap.set(this.basePath, this.id);
 
-      this.hlsPlaylist = `/mp4frag/${this.hlsPlaylistUrl}/hls.m3u8`;
+      this.hlsPlaylistPath = `/mp4frag/${this.basePath}/hls.m3u8`;
+
+      this.socketServerPath = `/mp4frag/${this.basePath}/socket.io`;
     }
 
-    destroyPlaylist() {
-      Mp4fragNode.hlsPlaylistUrlMap.delete(this.hlsPlaylistUrl);
+    destroyPaths() {
+      Mp4fragNode.basePathMap.delete(this.basePath);
 
-      this.hlsPlaylist = undefined;
+      this.hlsPlaylistPath = undefined;
+
+      this.socketServerPath = undefined;
     }
 
     createMp4frag() {
@@ -95,14 +103,44 @@ module.exports = RED => {
       return func;
     }
 
-    createRoute() {
-      const pattern = `^\/mp4frag\/${this.hlsPlaylistUrl}/(?:(hls.m3u8)|hls([0-9]+).m4s|(init-hls.mp4)|(hls.m3u8.txt))$`;
+    createSocketServer() {
+      this.socketServer = socketIO(server, { path: this.socketServerPath, transports: ['websocket', 'polling'] });
+
+      this.socketServer.on('connection', socket => {
+        socket.on('greeting', data => {
+          console.log('received greeting from client', data, this.id);
+
+          socket.emit('greeting', 'hey');
+        });
+
+        socket.on('disconnect', data => {
+          console.log('client socket disconnect', this.id);
+        });
+      });
+    }
+
+    destroySocketServer() {
+      // console.log('destroy socket server', this.id);
+
+      for (const socket in this.socketServer.nsps['/'].sockets) {
+        if (this.socketServer.nsps['/'].sockets.hasOwnProperty(socket)) {
+          this.socketServer.nsps['/'].sockets[socket].disconnect(true);
+        }
+      }
+
+      this.socketServer.removeAllListeners('connection');
+
+      this.socketServer = undefined;
+    }
+
+    createHttpRoute() {
+      const pattern = `^\/mp4frag\/${this.basePath}/(?:(hls.m3u8)|hls([0-9]+).m4s|(init-hls.mp4)|(hls.m3u8.txt))$`;
 
       this.routePath = new RegExp(pattern, 'i');
 
       RED.httpNode.get(this.routePath, (req, res) => {
         if (typeof this.mp4frag === 'undefined') {
-          return res.status(404).send(_('mp4frag.error.mp4frag_not_found', { hlsPlaylistUrl: this.hlsPlaylistUrl }));
+          return res.status(404).send(_('mp4frag.error.mp4frag_not_found', { basePath: this.basePath }));
         }
 
         const { params } = req;
@@ -122,7 +160,7 @@ module.exports = RED => {
             return res.send(m3u8);
           }
 
-          return res.status(404).send(_('mp4frag.error.m3u8_not_found', { hlsPlaylistUrl: this.hlsPlaylistUrl }));
+          return res.status(404).send(_('mp4frag.error.m3u8_not_found', { basePath: this.basePath }));
         }
 
         if (params[1]) {
@@ -140,7 +178,7 @@ module.exports = RED => {
             return res.send(segment);
           }
 
-          return res.status(404).send(_('mp4frag.error.segment_not_found', { sequence, hlsPlaylistUrl: this.hlsPlaylistUrl }));
+          return res.status(404).send(_('mp4frag.error.segment_not_found', { sequence, basePath: this.basePath }));
         }
 
         if (params[2]) {
@@ -152,7 +190,7 @@ module.exports = RED => {
             return res.send(initialization);
           }
 
-          return res.status(404).send(_('mp4frag.error.initialization_not_found', { hlsPlaylistUrl: this.hlsPlaylistUrl }));
+          return res.status(404).send(_('mp4frag.error.initialization_not_found', { basePath: this.basePath }));
         }
 
         if (params[3]) {
@@ -164,12 +202,12 @@ module.exports = RED => {
             return res.send(m3u8);
           }
 
-          return res.status(404).send(_('mp4frag.error.m3u8_not_found', { hlsPlaylistUrl: this.hlsPlaylistUrl }));
+          return res.status(404).send(_('mp4frag.error.m3u8_not_found', { basePath: this.basePath }));
         }
       });
     }
 
-    destroyRoute() {
+    destroyHttpRoute() {
       const { stack } = RED.httpNode._router;
 
       for (let i = stack.length - 1; i >= 0; --i) {
@@ -214,11 +252,13 @@ module.exports = RED => {
 
       this.removeListener('close', this.onClose);
 
-      this.destroyRoute();
+      this.destroyHttpRoute();
+
+      this.destroySocketServer();
 
       this.destroyMp4frag();
 
-      this.destroyPlaylist();
+      this.destroyPaths();
 
       this.send({ /* topic: 'set_source', */ payload: '' });
 
@@ -239,7 +279,9 @@ module.exports = RED => {
       const { sequence, duration } = data;
 
       if (sequence === 0) {
-        this.send({ /* topic: 'set_source', */ payload: this.hlsPlaylist });
+        const payload = { hlsPlaylist: this.hlsPlaylistPath, socketServer: this.socketServerPath };
+
+        this.send({ /* topic: 'set_source', */ payload: payload });
       }
 
       this.status({ fill: 'green', shape: 'dot', text: _('mp4frag.info.segment', { sequence, duration }) });
@@ -252,9 +294,9 @@ module.exports = RED => {
     }
   }
 
-  Mp4fragNode.hlsPlaylistUrlMap = new Map();
+  Mp4fragNode.basePathMap = new Map();
 
-  Mp4fragNode.hlsPlaylistUrlRegex = /^[a-z0-9_.]{1,50}$/i;
+  Mp4fragNode.basePathRegex = /^[a-z0-9_.]{1,50}$/i;
 
   registerType(NODE_TYPE, Mp4fragNode);
 };
