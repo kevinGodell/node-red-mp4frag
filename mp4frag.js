@@ -28,7 +28,7 @@ module.exports = RED => {
 
         this.createHttpRoute();
 
-        this.createSocketServer();
+        this.createSocketIoServer();
 
         this.on('input', this.onInput);
 
@@ -103,7 +103,7 @@ module.exports = RED => {
       return func;
     }
 
-    createSocketServer() {
+    createSocketIoServer() {
       if (typeof Mp4fragNode.socketIoServer === 'undefined') {
         Mp4fragNode.socketIoServer = new SocketIo(server, { path: '/mp4frag/socket.io', transports: ['websocket', 'polling'] });
       }
@@ -127,16 +127,16 @@ module.exports = RED => {
       });
     }
 
-    destroySocketServer() {
-      Object.keys(this.socketIoServerOfNamespace.connected).forEach(socketId => {
-        this.socketIoServerOfNamespace.connected[socketId].disconnect();
+    destroySocketIoServer() {
+      Object.keys(this.socketIoServerOfNamespace.connected).forEach(socket => {
+        this.socketIoServerOfNamespace.connected[socket].disconnect(true);
       });
 
       this.socketIoServerOfNamespace.removeAllListeners();
 
       this.socketIoServerOfNamespace = undefined;
 
-      delete Mp4fragNode.socketIoServer.nsps[this.namespace];
+      Mp4fragNode.socketIoServer.nsps[this.namespace] = undefined;
     }
 
     createHttpRoute() {
@@ -260,7 +260,7 @@ module.exports = RED => {
 
       this.destroyHttpRoute();
 
-      this.destroySocketServer();
+      this.destroySocketIoServer();
 
       this.destroyMp4frag();
 
