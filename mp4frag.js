@@ -1,6 +1,6 @@
 'use strict';
 
-const socketIO = require('socket.io');
+const SocketIo = require('socket.io');
 
 const Mp4Frag = require('mp4frag');
 
@@ -57,7 +57,7 @@ module.exports = RED => {
 
       this.hlsPlaylistPath = `/mp4frag/${this.basePath}/hls.m3u8`;
 
-      this.socketServerPath = `/mp4frag/${this.basePath}/socket.io`;
+      this.namespace = `/${this.basePath}`;
     }
 
     destroyPaths() {
@@ -104,33 +104,39 @@ module.exports = RED => {
     }
 
     createSocketServer() {
-      this.socketServer = socketIO(server, { path: this.socketServerPath, transports: ['websocket', 'polling'] });
+      if (typeof Mp4fragNode.socketIoServer === 'undefined') {
+        Mp4fragNode.socketIoServer = new SocketIo(server, { path: '/mp4frag/socket.io', transports: ['websocket', 'polling'] });
+      }
 
-      this.socketServer.on('connection', socket => {
+      this.socketIoServerOfNamespace = Mp4fragNode.socketIoServer.of(this.namespace);
+
+      this.socketIoServerOfNamespace.on('connect', socket => {
+        // or connection
+        console.log('connect');
+
         socket.on('greeting', data => {
-          console.log('received greeting from client', data, this.id);
+          console.log('received greeting from client', data, this.id, this.namespace);
 
-          socket.emit('greeting', 'hey');
+          socket.emit('greeting', this.namespace);
+          console.log('emitted', 'hey');
         });
 
         socket.on('disconnect', data => {
-          console.log('client socket disconnect', this.id);
+          console.log('client socket disconnect', this.id, this.namespace);
         });
       });
     }
 
     destroySocketServer() {
-      // console.log('destroy socket server', this.id);
+      Object.keys(this.socketIoServerOfNamespace.connected).forEach(socketId => {
+        this.socketIoServerOfNamespace.connected[socketId].disconnect();
+      });
 
-      for (const socket in this.socketServer.nsps['/'].sockets) {
-        if (this.socketServer.nsps['/'].sockets.hasOwnProperty(socket)) {
-          this.socketServer.nsps['/'].sockets[socket].disconnect(true);
-        }
-      }
+      this.socketIoServerOfNamespace.removeAllListeners();
 
-      this.socketServer.removeAllListeners('connection');
+      this.socketIoServerOfNamespace = undefined;
 
-      this.socketServer = undefined;
+      delete Mp4fragNode.socketIoServer.nsps[this.namespace];
     }
 
     createHttpRoute() {
@@ -279,7 +285,7 @@ module.exports = RED => {
       const { sequence, duration } = data;
 
       if (sequence === 0) {
-        const payload = { hlsPlaylist: this.hlsPlaylistPath, socketServer: this.socketServerPath };
+        const payload = { hlsPlaylist: this.hlsPlaylistPath, socketIo: { path: '/mp4frag/socket.io', namespace: this.namespace } };
 
         this.send({ /* topic: 'set_source', */ payload: payload });
       }
@@ -297,6 +303,8 @@ module.exports = RED => {
   Mp4fragNode.basePathMap = new Map();
 
   Mp4fragNode.basePathRegex = /^[a-z0-9_.]{1,50}$/i;
+
+  Mp4fragNode.socketIoServer = undefined;
 
   registerType(NODE_TYPE, Mp4fragNode);
 };
