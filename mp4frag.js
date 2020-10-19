@@ -11,6 +11,8 @@ module.exports = RED => {
 
   const NODE_TYPE = 'mp4frag';
 
+  const SOCKET_IO_PATH = '/mp4frag/socket.io';
+
   class Mp4fragNode {
     constructor(config) {
       createNode(this, config);
@@ -84,6 +86,8 @@ module.exports = RED => {
     }
 
     destroyMp4frag() {
+      // this.mp4frag.removeAllListeners();
+
       this.mp4frag.off('initialized', this.mp4fragEvents.initialized);
 
       this.mp4frag.off('segment', this.mp4fragEvents.segment);
@@ -105,20 +109,79 @@ module.exports = RED => {
 
     createSocketIoServer() {
       if (typeof Mp4fragNode.socketIoServer === 'undefined') {
-        Mp4fragNode.socketIoServer = new SocketIo(server, { path: '/mp4frag/socket.io', transports: ['websocket', 'polling'] });
+        Mp4fragNode.socketIoServer = new SocketIo(server, { path: SOCKET_IO_PATH, transports: ['websocket', 'polling'] });
       }
+
+      this.socketsWaitingForSegment = [];
 
       this.socketIoServerOfNamespace = Mp4fragNode.socketIoServer.of(this.namespace);
 
-      this.socketIoServerOfNamespace.on('connect', socket => {
-        // or connection
-        console.log('connect');
+      /* this.socketIoServerOfNamespace.use((socket, next) => {
+        next();
+      });*/
 
-        socket.on('greeting', data => {
-          console.log('received greeting from client', data, this.id, this.namespace);
+      this.socketIoServerOfNamespace.on('connect' /* or connection */, socket => {
+        // console.log('connect');
 
-          socket.emit('greeting', this.namespace);
-          console.log('emitted', 'hey');
+        // keep list of sockets waiting for initialization, mime, segment if requested too early
+
+        // might send ack to verify round trip
+
+        // connect -> mime -> initialization -> segments...
+
+        // todo group all errors into 'source_error' with {type: ''}
+
+        // todo if mp4frag defined but mime not ready, add once listener to broadcast data to waiting socket
+        socket.on('mime', () => {
+          if (typeof this.mp4frag === 'undefined') {
+            return socket.emit('mp4frag_error', 'mp4frag not found');
+          }
+
+          const { mime } = this.mp4frag;
+
+          if (mime === null) {
+            return socket.emit('mime_error', 'mime not found');
+          }
+
+          socket.emit('mime', mime);
+        });
+
+        socket.on('initialization', () => {
+          if (typeof this.mp4frag === 'undefined') {
+            return socket.emit('mp4frag_error', 'mp4frag not found');
+          }
+
+          const { initialization } = this.mp4frag;
+
+          if (initialization === null) {
+            return socket.emit('initialization_error', 'initialization not found');
+          }
+
+          socket.binary(true).emit('initialization', initialization);
+        });
+
+        socket.on('segment', (data = {}) => {
+          if (typeof this.mp4frag === 'undefined') {
+            return socket.emit('mp4frag_error', 'mp4frag not found');
+          }
+
+          const { segmentObject } = this.mp4frag;
+
+          if (segmentObject.segment === null) {
+            return socket.emit('segment_error', 'segment not found');
+          }
+
+          const { timestamp } = data;
+
+          if (typeof timestamp === 'number') {
+            if (timestamp < segmentObject.timestamp) {
+              socket.binary(true).emit('segment', segmentObject);
+            } else {
+              this.socketsWaitingForSegment.push(socket);
+            }
+          } else {
+            socket.binary(true).emit('segment', segmentObject);
+          }
         });
 
         socket.on('disconnect', data => {
@@ -135,6 +198,10 @@ module.exports = RED => {
       this.socketIoServerOfNamespace.removeAllListeners();
 
       this.socketIoServerOfNamespace = undefined;
+
+      this.socketsWaitingForSegment.length = 0;
+
+      this.socketsWaitingForSegment = undefined;
 
       Mp4fragNode.socketIoServer.nsps[this.namespace] = undefined;
     }
@@ -288,6 +355,14 @@ module.exports = RED => {
         const payload = { hlsPlaylist: this.hlsPlaylistPath, socketIo: { path: '/mp4frag/socket.io', namespace: this.namespace } };
 
         this.send({ /* topic: 'set_source', */ payload: payload });
+      }
+
+      if (this.socketsWaitingForSegment.length > 0) {
+        for (let i = 0; i < this.socketsWaitingForSegment.length; ++i) {
+          this.socketsWaitingForSegment[i].binary(true).emit('segment', data);
+        }
+
+        this.socketsWaitingForSegment.length = 0;
       }
 
       this.status({ fill: 'green', shape: 'dot', text: _('mp4frag.info.segment', { sequence, duration }) });
