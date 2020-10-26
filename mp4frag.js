@@ -109,7 +109,7 @@ module.exports = RED => {
 
     createSocketIoServer() {
       if (typeof Mp4fragNode.socketIoServer === 'undefined') {
-        Mp4fragNode.socketIoServer = new SocketIo(server, { path: SOCKET_IO_PATH, transports: ['websocket', 'polling'] });
+        Mp4fragNode.socketIoServer = new SocketIo(server, { path: SOCKET_IO_PATH, transports: ['websocket' /* , 'polling'*/] });
       }
 
       this.socketsWaitingForSegment = [];
@@ -352,15 +352,20 @@ module.exports = RED => {
       const { sequence, duration } = data;
 
       if (sequence === 0) {
-        const payload = { hlsPlaylist: this.hlsPlaylistPath, socketIo: { path: '/mp4frag/socket.io', namespace: this.namespace } };
+        const payload = {
+          hlsPlaylist: this.hlsPlaylistPath,
+          socketIo: { path: SOCKET_IO_PATH, namespace: this.namespace },
+        };
 
         this.send({ /* topic: 'set_source', */ payload: payload });
       }
 
       if (this.socketsWaitingForSegment.length > 0) {
-        for (let i = 0; i < this.socketsWaitingForSegment.length; ++i) {
-          this.socketsWaitingForSegment[i].binary(true).emit('segment', data);
-        }
+        this.socketsWaitingForSegment.forEach(socket => {
+          if (socket.connected === true) {
+            socket.binary(true).emit('segment', data);
+          }
+        });
 
         this.socketsWaitingForSegment.length = 0;
       }
