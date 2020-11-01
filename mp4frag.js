@@ -59,6 +59,8 @@ module.exports = RED => {
 
       this.hlsPlaylistPath = `/mp4frag/${this.basePath}/hls.m3u8`;
 
+      this.mp4VideoPath = `/mp4frag/${this.basePath}/video.mp4`;
+
       this.namespace = `/${this.basePath}`;
     }
 
@@ -207,7 +209,7 @@ module.exports = RED => {
     }
 
     createHttpRoute() {
-      const pattern = `^\/mp4frag\/${this.basePath}/(?:(hls.m3u8)|hls([0-9]+).m4s|(init-hls.mp4)|(hls.m3u8.txt))$`;
+      const pattern = `^\/mp4frag\/${this.basePath}/(?:(hls.m3u8)|hls([0-9]+).m4s|(init-hls.mp4)|(hls.m3u8.txt)|(video.mp4))$`;
 
       this.routePath = new RegExp(pattern, 'i');
 
@@ -276,6 +278,40 @@ module.exports = RED => {
           }
 
           return res.status(404).send(_('mp4frag.error.m3u8_not_found', { basePath: this.basePath }));
+        }
+
+        if (params[4]) {
+          const { initialization, segment } = this.mp4frag;
+
+          if (!initialization) {
+            return res.status(404).send(_('mp4frag.error.initialization_not_found', { basePath: this.basePath }));
+          }
+
+          res.type('mp4');
+
+          res.write(initialization);
+
+          if (segment) {
+            res.write(segment);
+          }
+
+          this.mp4frag.pipe(res, { end: true });
+
+          const reset = () => {
+            res && res.end();
+          };
+
+          const close = () => {
+            if (this.mp4frag) {
+              this.mp4frag.off('reset', reset);
+
+              this.mp4frag.unpipe(res);
+            }
+          };
+
+          this.mp4frag.once('reset', reset);
+
+          res.once('close', close);
         }
       });
     }
@@ -355,6 +391,7 @@ module.exports = RED => {
         const payload = {
           hlsPlaylist: this.hlsPlaylistPath,
           socketIo: { path: SOCKET_IO_PATH, namespace: this.namespace },
+          mp4Video: this.mp4VideoPath,
         };
 
         this.send({ /* topic: 'set_source', */ payload: payload });
