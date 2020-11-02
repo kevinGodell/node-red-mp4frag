@@ -69,7 +69,9 @@ module.exports = RED => {
 
       this.hlsPlaylistPath = undefined;
 
-      this.socketServerPath = undefined;
+      this.mp4VideoPath = undefined;
+
+      this.namespace = undefined;
     }
 
     createMp4frag() {
@@ -88,8 +90,6 @@ module.exports = RED => {
     }
 
     destroyMp4frag() {
-      // this.mp4frag.removeAllListeners();
-
       this.mp4frag.off('initialized', this.mp4fragEvents.initialized);
 
       this.mp4frag.off('segment', this.mp4fragEvents.segment);
