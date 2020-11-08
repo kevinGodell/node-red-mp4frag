@@ -298,10 +298,12 @@ module.exports = RED => {
           this.mp4frag.pipe(res, { end: true });
 
           const reset = () => {
+            console.log('mp4frag reset', this.id);
             res && res.end();
           };
 
           const close = () => {
+            console.log('response close', this.id);
             if (this.mp4frag) {
               this.mp4frag.off('reset', reset);
 
