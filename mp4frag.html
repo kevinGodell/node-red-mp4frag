@@ -46,9 +46,9 @@
         return this.name;
       }
       if (this.valid === false && this.validationErrors.includes('basePath')) {
-        return `/mp4frag/${this.id}/hls.m3u8`;
+        return `/mp4frag/${this.id}/`;
       }
-      return `/mp4frag/${this.basePath}/hls.m3u8`;
+      return `/mp4frag/${this.basePath}/`;
     },
     outputLabels: 'status',
     outputs: 1,
@@ -90,7 +90,7 @@
 
       $('<button type="button" class="red-ui-button red-ui-button-small"><i class="fa fa-book"></i> help</button>')
         .on('click', () => {
-          RED.sidebar.help.show('ui_mp4frag');
+          RED.sidebar.help.show('mp4frag');
         })
         .appendTo($('div.red-ui-tray-footer'));
     },
