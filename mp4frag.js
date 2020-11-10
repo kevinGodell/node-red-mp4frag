@@ -433,8 +433,6 @@ module.exports = RED => {
 
     onReset() {
       if (this.resWaitingForSegments.size > 0) {
-        console.log(this.resWaitingForSegments.size);
-
         this.resWaitingForSegments.forEach(res => {
           if (res.writableEnded === false || res.finished === false) {
             res.end();
