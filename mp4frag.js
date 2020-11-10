@@ -86,6 +86,7 @@ module.exports = RED => {
         initialized: this.mp4fragOn('initialized', data => this.onInitialized(data)),
         segment: this.mp4fragOn('segment', data => this.onSegment(data)),
         error: this.mp4fragOn('error', err => this.onError(err)),
+        reset: this.mp4fragOn('reset', () => this.onReset()),
       };
     }
 
@@ -95,6 +96,8 @@ module.exports = RED => {
       this.mp4frag.off('segment', this.mp4fragEvents.segment);
 
       this.mp4frag.off('error', this.mp4fragEvents.error);
+
+      this.mp4frag.off('reset', this.mp4fragEvents.reset);
 
       this.mp4fragEvents = undefined;
 
@@ -114,7 +117,7 @@ module.exports = RED => {
         Mp4fragNode.socketIoServer = new SocketIo(server, { path: SOCKET_IO_PATH, transports: ['websocket' /* , 'polling'*/] });
       }
 
-      this.socketsWaitingForSegment = [];
+      this.socketWaitingForSegment = new Set();
 
       this.socketIoServerOfNamespace = Mp4fragNode.socketIoServer.of(this.namespace);
 
@@ -179,7 +182,7 @@ module.exports = RED => {
             if (timestamp < segmentObject.timestamp) {
               socket.binary(true).emit('segment', segmentObject);
             } else {
-              this.socketsWaitingForSegment.push(socket);
+              this.socketWaitingForSegment.add(socket);
             }
           } else {
             socket.binary(true).emit('segment', segmentObject);
@@ -201,14 +204,16 @@ module.exports = RED => {
 
       this.socketIoServerOfNamespace = undefined;
 
-      this.socketsWaitingForSegment.length = 0;
+      this.socketWaitingForSegment.clear();
 
-      this.socketsWaitingForSegment = undefined;
+      this.socketWaitingForSegment = undefined;
 
       Mp4fragNode.socketIoServer.nsps[this.namespace] = undefined;
     }
 
     createHttpRoute() {
+      this.resWaitingForSegments = new Set();
+
       const pattern = `^\/mp4frag\/${this.basePath}/(?:(hls.m3u8)|hls([0-9]+).m4s|(init-hls.mp4)|(hls.m3u8.txt)|(video.mp4))$`;
 
       this.routePath = new RegExp(pattern, 'i');
@@ -281,6 +286,8 @@ module.exports = RED => {
         }
 
         if (params[4]) {
+          console.log(params[4], this.id);
+
           const { initialization, segment } = this.mp4frag;
 
           if (!initialization) {
@@ -295,30 +302,32 @@ module.exports = RED => {
             res.write(segment);
           }
 
-          this.mp4frag.pipe(res, { end: true });
+          res.flush();
 
-          const reset = () => {
-            console.log('mp4frag reset', this.id);
-            res && res.end();
-          };
+          this.resWaitingForSegments.add(res);
 
-          const close = () => {
-            console.log('response close', this.id);
-            if (this.mp4frag) {
-              this.mp4frag.off('reset', reset);
+          res.once('close', () => {
+            this.resWaitingForSegments instanceof Set === true && this.resWaitingForSegments.delete(res);
 
-              this.mp4frag.unpipe(res);
-            }
-          };
-
-          this.mp4frag.once('reset', reset);
-
-          res.once('close', close);
+            res.end();
+          });
         }
       });
     }
 
     destroyHttpRoute() {
+      if (this.resWaitingForSegments.size > 0) {
+        this.resWaitingForSegments.forEach(res => {
+          if (res.writableEnded === false || res.finished === false) {
+            res.end();
+          }
+        });
+
+        this.resWaitingForSegments.clear();
+      }
+
+      this.resWaitingForSegments = undefined;
+
       const { stack } = RED.httpNode._router;
 
       for (let i = stack.length - 1; i >= 0; --i) {
@@ -387,7 +396,7 @@ module.exports = RED => {
     }
 
     onSegment(data) {
-      const { sequence, duration } = data;
+      const { segment, sequence, duration } = data;
 
       if (sequence === 0) {
         const payload = {
@@ -399,17 +408,39 @@ module.exports = RED => {
         this.send({ /* topic: 'set_source', */ payload: payload });
       }
 
-      if (this.socketsWaitingForSegment.length > 0) {
-        this.socketsWaitingForSegment.forEach(socket => {
+      if (this.socketWaitingForSegment.size > 0) {
+        this.socketWaitingForSegment.forEach(socket => {
           if (socket.connected === true) {
             socket.binary(true).emit('segment', data);
           }
         });
 
-        this.socketsWaitingForSegment.length = 0;
+        this.socketWaitingForSegment.clear();
+      }
+
+      if (this.resWaitingForSegments.size > 0) {
+        this.resWaitingForSegments.forEach(res => {
+          if (res.writableEnded === false || res.finished === false) {
+            res.write(segment);
+
+            res.flush();
+          }
+        });
       }
 
       this.status({ fill: 'green', shape: 'dot', text: _('mp4frag.info.segment', { sequence, duration }) });
+    }
+
+    onReset() {
+      if (this.resWaitingForSegments.size > 0) {
+        console.log(this.resWaitingForSegments.size);
+
+        this.resWaitingForSegments.forEach(res => {
+          if (res.writableEnded === false || res.finished === false) {
+            res.end();
+          }
+        });
+      }
     }
 
     onError(err) {
