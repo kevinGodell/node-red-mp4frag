@@ -29,7 +29,7 @@
   },
   "homepage": "https://github.com/kevinGodell/node-red-contrib-mp4frag#readme",
   "dependencies": {
-    "mp4frag": "github:kevinGodell/mp4frag#0.3.0",
+    "mp4frag": "github:kevinGodell/mp4frag",
     "socket.io": "^2.3.0"
   },
   "files": [
