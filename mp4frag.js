@@ -189,6 +189,14 @@ module.exports = RED => {
           }
         });
 
+        socket.on('segments', () => {
+          console.log('segments');
+        });
+
+        socket.on('stop', () => {
+          console.log('stop');
+        });
+
         socket.on('disconnect', data => {
           console.log('client socket disconnect', this.id, this.namespace);
         });
@@ -341,6 +349,22 @@ module.exports = RED => {
       }
     }
 
+    destroy() {
+      this.removeListener('input', this.onInput);
+
+      this.removeListener('close', this.onClose);
+
+      this.destroyHttpRoute();
+
+      this.destroySocketIoServer();
+
+      this.destroyMp4frag();
+
+      this.destroyPaths();
+
+      this.send({ /* topic: 'set_source', */ payload: '' });
+    }
+
     onInput(msg) {
       const { payload } = msg;
 
@@ -368,19 +392,7 @@ module.exports = RED => {
     }
 
     onClose(removed, done) {
-      this.removeListener('input', this.onInput);
-
-      this.removeListener('close', this.onClose);
-
-      this.destroyHttpRoute();
-
-      this.destroySocketIoServer();
-
-      this.destroyMp4frag();
-
-      this.destroyPaths();
-
-      this.send({ /* topic: 'set_source', */ payload: '' });
+      this.destroy();
 
       if (removed) {
         this.status({ fill: 'red', shape: 'ring', text: _('mp4frag.info.removed') });
@@ -442,6 +454,8 @@ module.exports = RED => {
     }
 
     onError(err) {
+      this.mp4frag.resetCache();
+
       this.error(err);
 
       this.status({ fill: 'red', shape: 'dot', text: err.toString() });
