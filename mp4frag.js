@@ -117,7 +117,7 @@ module.exports = RED => {
         Mp4fragNode.socketIoServer = new SocketIo(server, { path: SOCKET_IO_PATH, transports: ['websocket' /* , 'polling'*/] });
       }
 
-      this.socketWaitingForSegment = new Set();
+      this.socketWaitingForSegments = new Map();
 
       this.socketIoServerOfNamespace = Mp4fragNode.socketIoServer.of(this.namespace);
 
@@ -134,18 +134,16 @@ module.exports = RED => {
 
         // connect -> mime -> initialization -> segments...
 
-        // todo group all errors into 'source_error' with {type: ''}
-
         // todo if mp4frag defined but mime not ready, add once listener to broadcast data to waiting socket
         socket.on('mime', () => {
           if (typeof this.mp4frag === 'undefined') {
-            return socket.emit('mp4frag_error', 'mp4frag not found');
+            return socket.emit('mp4frag_error', _('mp4frag.error.mp4frag_not_found', { basePath: this.basePath }));
           }
 
           const { mime } = this.mp4frag;
 
           if (mime === null) {
-            return socket.emit('mime_error', 'mime not found');
+            return socket.emit('mp4frag_error', _('mp4frag.error.mime_not_found', { basePath: this.basePath }));
           }
 
           socket.emit('mime', mime);
@@ -153,13 +151,13 @@ module.exports = RED => {
 
         socket.on('initialization', () => {
           if (typeof this.mp4frag === 'undefined') {
-            return socket.emit('mp4frag_error', 'mp4frag not found');
+            return socket.emit('mp4frag_error', _('mp4frag.error.mp4frag_not_found', { basePath: this.basePath }));
           }
 
           const { initialization } = this.mp4frag;
 
           if (initialization === null) {
-            return socket.emit('initialization_error', 'initialization not found');
+            return socket.emit('mp4frag_error', _('mp4frag.error.initialization_not_found', { basePath: this.basePath }));
           }
 
           socket.binary(true).emit('initialization', initialization);
@@ -167,38 +165,48 @@ module.exports = RED => {
 
         socket.on('segment', (data = {}) => {
           if (typeof this.mp4frag === 'undefined') {
-            return socket.emit('mp4frag_error', 'mp4frag not found');
+            return socket.emit('mp4frag_error', _('mp4frag.error.mp4frag_not_found', { basePath: this.basePath }));
           }
 
-          const { segmentObject } = this.mp4frag;
+          if (typeof data.timestamp === 'number') {
+            const { segmentObject } = this.mp4frag;
 
-          if (segmentObject.segment === null) {
-            return socket.emit('segment_error', 'segment not found');
-          }
-
-          const { timestamp } = data;
-
-          if (typeof timestamp === 'number') {
-            if (timestamp < segmentObject.timestamp) {
+            if (segmentObject.timestamp > data.timestamp) {
               socket.binary(true).emit('segment', segmentObject);
             } else {
-              this.socketWaitingForSegment.add(socket);
+              this.socketWaitingForSegments.set(socket, false);
             }
           } else {
-            socket.binary(true).emit('segment', segmentObject);
+            if (data.buffered === true) {
+              const { segmentList, duration, timestamp, sequence } = this.mp4frag;
+
+              if (segmentList !== null) {
+                socket.binary(true).emit('segment', { segment: segmentList, duration, timestamp, sequence });
+
+                if (data.all !== false) {
+                  this.socketWaitingForSegments.set(socket, true);
+                }
+              } else {
+                this.socketWaitingForSegments.set(socket, data.all !== false);
+              }
+            } else {
+              const { segmentObject } = this.mp4frag;
+
+              if (segmentObject.segment !== null) {
+                socket.binary(true).emit('segment', segmentObject);
+
+                if (data.all !== false) {
+                  this.socketWaitingForSegments.set(socket, true);
+                }
+              } else {
+                this.socketWaitingForSegments.set(socket, data.all !== false);
+              }
+            }
           }
-        });
-
-        socket.on('segments', () => {
-          console.log('segments');
-        });
-
-        socket.on('stop', () => {
-          console.log('stop');
         });
 
         socket.on('disconnect', data => {
-          console.log('client socket disconnect', this.id, this.namespace);
+          this.socketWaitingForSegments instanceof Map === true && this.socketWaitingForSegments.delete(socket);
         });
       });
     }
@@ -212,9 +220,9 @@ module.exports = RED => {
 
       this.socketIoServerOfNamespace = undefined;
 
-      this.socketWaitingForSegment.clear();
+      this.socketWaitingForSegments.clear();
 
-      this.socketWaitingForSegment = undefined;
+      this.socketWaitingForSegments = undefined;
 
       Mp4fragNode.socketIoServer.nsps[this.namespace] = undefined;
     }
@@ -374,9 +382,7 @@ module.exports = RED => {
 
       const { code, signal } = payload;
 
-      // current method for resetting cache
-      // grab exit code or signal from exec
-      // cant just check (!code) because it could be 0 ???
+      // current method for resetting cache, grab exit code or signal from exec
       if (typeof code !== 'undefined' || typeof signal !== 'undefined') {
         this.mp4frag.resetCache();
 
@@ -420,14 +426,23 @@ module.exports = RED => {
         this.send({ /* topic: 'set_source', */ payload: payload });
       }
 
-      if (this.socketWaitingForSegment.size > 0) {
-        this.socketWaitingForSegment.forEach(socket => {
+      // trigger time range error
+      /* if (sequence % 50 === 0) {
+        return;
+      }*/
+
+      if (this.socketWaitingForSegments.size > 0) {
+        this.socketWaitingForSegments.forEach((all, socket, map) => {
           if (socket.connected === true) {
             socket.binary(true).emit('segment', data);
+
+            if (all === false) {
+              this.socketWaitingForSegments.delete(socket);
+            }
+          } else {
+            this.socketWaitingForSegments.delete(socket);
           }
         });
-
-        this.socketWaitingForSegment.clear();
       }
 
       if (this.resWaitingForSegments.size > 0) {
