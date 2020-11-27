@@ -44,13 +44,13 @@
     }
   },
   "devDependencies": {
-    "eslint": "^7.13.0",
+    "eslint": "^7.14.0",
     "eslint-config-prettier": "^6.15.0",
     "eslint-plugin-prettier": "^3.1.4",
     "prettier": "^2.2.0"
   },
   "optionalDependencies": {
-    "bufferutil": "^4.0.1",
-    "utf-8-validate": "^5.0.2"
+    "bufferutil": "^4.0.2",
+    "utf-8-validate": "^5.0.3"
   }
 }
