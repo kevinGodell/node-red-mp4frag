@@ -21,6 +21,7 @@
       "mp4frag_not_found": "mp4frag not found for \"__basePath__\"",
       "m3u8_not_found": "m3u8 playlist not found for \"__basePath__\"",
       "segment_not_found": "segment __sequence__ not found for \"__basePath__\"",
+      "mime_not_found": "mime not found for \"__basePath__\"",
       "initialization_not_found": "initialization fragment not found for \"__basePath__\""
     }
   }
