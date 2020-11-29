@@ -114,7 +114,7 @@ module.exports = RED => {
 
     createSocketIoServer() {
       if (typeof Mp4fragNode.socketIoServer === 'undefined') {
-        Mp4fragNode.socketIoServer = new SocketIo(server, { path: SOCKET_IO_PATH, transports: ['websocket' /* , 'polling'*/] });
+        Mp4fragNode.socketIoServer = SocketIo(server, { path: SOCKET_IO_PATH, transports: ['websocket' /* , 'polling'*/] });
       }
 
       this.socketWaitingForSegments = new Map();
@@ -160,7 +160,7 @@ module.exports = RED => {
             return socket.emit('mp4frag_error', _('mp4frag.error.initialization_not_found', { basePath: this.basePath }));
           }
 
-          socket.binary(true).emit('initialization', initialization);
+          socket.emit('initialization', initialization);
         });
 
         socket.on('segment', (data = {}) => {
@@ -172,7 +172,7 @@ module.exports = RED => {
             const { segmentObject } = this.mp4frag;
 
             if (segmentObject.timestamp > data.timestamp) {
-              socket.binary(true).emit('segment', segmentObject);
+              socket.emit('segment', segmentObject);
             } else {
               this.socketWaitingForSegments.set(socket, false);
             }
@@ -181,7 +181,7 @@ module.exports = RED => {
               const { segmentList, duration, timestamp, sequence } = this.mp4frag;
 
               if (segmentList !== null) {
-                socket.binary(true).emit('segment', { segment: segmentList, duration, timestamp, sequence });
+                socket.emit('segment', { segment: segmentList, duration, timestamp, sequence });
 
                 if (data.all !== false) {
                   this.socketWaitingForSegments.set(socket, true);
@@ -193,7 +193,7 @@ module.exports = RED => {
               const { segmentObject } = this.mp4frag;
 
               if (segmentObject.segment !== null) {
-                socket.binary(true).emit('segment', segmentObject);
+                socket.emit('segment', segmentObject);
 
                 if (data.all !== false) {
                   this.socketWaitingForSegments.set(socket, true);
@@ -434,7 +434,7 @@ module.exports = RED => {
       if (this.socketWaitingForSegments.size > 0) {
         this.socketWaitingForSegments.forEach((all, socket, map) => {
           if (socket.connected === true) {
-            socket.binary(true).emit('segment', data);
+            socket.emit('segment', data);
 
             if (all === false) {
               this.socketWaitingForSegments.delete(socket);
