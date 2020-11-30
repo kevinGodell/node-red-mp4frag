@@ -212,8 +212,15 @@ module.exports = RED => {
     }
 
     destroySocketIoServer() {
-      Object.keys(this.socketIoServerOfNamespace.connected).forEach(socket => {
-        this.socketIoServerOfNamespace.connected[socket].disconnect(true);
+      const sockets =
+        this.socketIoServerOfNamespace.sockets instanceof Map
+          ? this.socketIoServerOfNamespace.sockets
+          : Object.values(this.socketIoServerOfNamespace.sockets);
+
+      sockets.forEach(socket => {
+        if (socket.connected === true) {
+          socket.disconnect(true);
+        }
       });
 
       this.socketIoServerOfNamespace.removeAllListeners();
@@ -224,7 +231,11 @@ module.exports = RED => {
 
       this.socketWaitingForSegments = undefined;
 
-      Mp4fragNode.socketIoServer.nsps[this.namespace] = undefined;
+      if (Mp4fragNode.socketIoServer._nsps instanceof Map === true) {
+        Mp4fragNode.socketIoServer._nsps.delete(this.namespace);
+      } else {
+        Mp4fragNode.socketIoServer.nsps[this.namespace] = undefined;
+      }
     }
 
     createHttpRoute() {
