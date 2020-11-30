@@ -213,7 +213,7 @@ module.exports = RED => {
 
     destroySocketIoServer() {
       const sockets =
-        this.socketIoServerOfNamespace.sockets instanceof Map
+        this.socketIoServerOfNamespace.sockets instanceof Map === true
           ? this.socketIoServerOfNamespace.sockets
           : Object.values(this.socketIoServerOfNamespace.sockets);
 
