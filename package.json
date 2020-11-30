@@ -29,8 +29,10 @@
   },
   "homepage": "https://github.com/kevinGodell/node-red-contrib-mp4frag#readme",
   "dependencies": {
-    "mp4frag": "github:kevinGodell/mp4frag",
-    "socket.io": "^2.3.0"
+    "mp4frag": "github:kevinGodell/mp4frag"
+  },
+  "peerDependencies": {
+    "socket.io": "^2.3.0 || ^3.0.3"
   },
   "files": [
     "mp4frag.js",
