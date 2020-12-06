@@ -114,100 +114,136 @@ module.exports = RED => {
 
     createSocketIoServer() {
       if (typeof Mp4fragNode.socketIoServer === 'undefined') {
-        Mp4fragNode.socketIoServer = SocketIo(server, { path: SOCKET_IO_PATH, transports: ['websocket' /* , 'polling'*/] });
+        Mp4fragNode.socketIoServer = SocketIo(server, {
+          path: SOCKET_IO_PATH,
+          transports: ['websocket' /* , 'polling'*/],
+        });
       }
+
+      this.socketIoKey = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 
       this.socketWaitingForSegments = new Map();
 
       this.socketIoServerOfNamespace = Mp4fragNode.socketIoServer.of(this.namespace);
 
-      /* this.socketIoServerOfNamespace.use((socket, next) => {
+      this.socketIoServerOfNamespace.use((socket, next) => {
+        if (typeof socket.handshake.auth === 'object') {
+          if (this.socketIoKey !== socket.handshake.auth.key) {
+            const err = new Error('not authorized');
+
+            err.data = { reason: 'auth key invalid' };
+
+            return setTimeout(() => {
+              next(err);
+            }, 5000);
+          }
+
+          socket.authenticated = true;
+        } else {
+          socket.authenticated = false;
+        }
+
         next();
-      });*/
+      });
 
       this.socketIoServerOfNamespace.on('connect' /* or connection */, socket => {
-        // console.log('connect');
-
-        // keep list of sockets waiting for initialization, mime, segment if requested too early
-
         // might send ack to verify round trip
 
-        // connect -> mime -> initialization -> segments...
+        // connect -> auth -> mime -> initialization -> segments...
 
-        // todo if mp4frag defined but mime not ready, add once listener to broadcast data to waiting socket
-        socket.on('mime', () => {
-          if (typeof this.mp4frag === 'undefined') {
-            return socket.emit('mp4frag_error', _('mp4frag.error.mp4frag_not_found', { basePath: this.basePath }));
-          }
-
-          const { mime } = this.mp4frag;
-
-          if (mime === null) {
-            return socket.emit('mp4frag_error', _('mp4frag.error.mime_not_found', { basePath: this.basePath }));
-          }
-
-          socket.emit('mime', mime);
-        });
-
-        socket.on('initialization', () => {
-          if (typeof this.mp4frag === 'undefined') {
-            return socket.emit('mp4frag_error', _('mp4frag.error.mp4frag_not_found', { basePath: this.basePath }));
-          }
-
-          const { initialization } = this.mp4frag;
-
-          if (initialization === null) {
-            return socket.emit('mp4frag_error', _('mp4frag.error.initialization_not_found', { basePath: this.basePath }));
-          }
-
-          socket.emit('initialization', initialization);
-        });
-
-        socket.on('segment', (data = {}) => {
-          if (typeof this.mp4frag === 'undefined') {
-            return socket.emit('mp4frag_error', _('mp4frag.error.mp4frag_not_found', { basePath: this.basePath }));
-          }
-
-          if (typeof data.timestamp === 'number') {
-            const { segmentObject } = this.mp4frag;
-
-            if (segmentObject.timestamp > data.timestamp) {
-              socket.emit('segment', segmentObject);
-            } else {
-              this.socketWaitingForSegments.set(socket, false);
+        const onAuthenticated = () => {
+          socket.on('mime', () => {
+            if (typeof this.mp4frag === 'undefined') {
+              return socket.emit('mp4frag_error', _('mp4frag.error.mp4frag_not_found', { basePath: this.basePath }));
             }
-          } else {
-            if (data.buffered === true) {
-              const { segmentList, duration, timestamp, sequence } = this.mp4frag;
 
-              if (segmentList !== null) {
-                socket.emit('segment', { segment: segmentList, duration, timestamp, sequence });
+            const { mime } = this.mp4frag;
 
-                if (data.all !== false) {
-                  this.socketWaitingForSegments.set(socket, true);
-                }
-              } else {
-                this.socketWaitingForSegments.set(socket, data.all !== false);
-              }
-            } else {
+            if (mime === null) {
+              return socket.emit('mp4frag_error', _('mp4frag.error.mime_not_found', { basePath: this.basePath }));
+            }
+
+            socket.emit('mime', mime);
+          });
+
+          socket.on('initialization', () => {
+            if (typeof this.mp4frag === 'undefined') {
+              return socket.emit('mp4frag_error', _('mp4frag.error.mp4frag_not_found', { basePath: this.basePath }));
+            }
+
+            const { initialization } = this.mp4frag;
+
+            if (initialization === null) {
+              return socket.emit('mp4frag_error', _('mp4frag.error.initialization_not_found', { basePath: this.basePath }));
+            }
+
+            socket.emit('initialization', initialization);
+          });
+
+          socket.on('segment', (data = {}) => {
+            if (typeof this.mp4frag === 'undefined') {
+              return socket.emit('mp4frag_error', _('mp4frag.error.mp4frag_not_found', { basePath: this.basePath }));
+            }
+
+            if (typeof data.timestamp === 'number') {
               const { segmentObject } = this.mp4frag;
 
-              if (segmentObject.segment !== null) {
+              if (segmentObject.timestamp > data.timestamp) {
                 socket.emit('segment', segmentObject);
+              } else {
+                this.socketWaitingForSegments.set(socket, false);
+              }
+            } else {
+              if (data.buffered === true) {
+                const { segmentList, duration, timestamp, sequence } = this.mp4frag;
 
-                if (data.all !== false) {
-                  this.socketWaitingForSegments.set(socket, true);
+                if (segmentList !== null) {
+                  socket.emit('segment', { segment: segmentList, duration, timestamp, sequence });
+
+                  if (data.all !== false) {
+                    this.socketWaitingForSegments.set(socket, true);
+                  }
+                } else {
+                  this.socketWaitingForSegments.set(socket, data.all !== false);
                 }
               } else {
-                this.socketWaitingForSegments.set(socket, data.all !== false);
+                const { segmentObject } = this.mp4frag;
+
+                if (segmentObject.segment !== null) {
+                  socket.emit('segment', segmentObject);
+
+                  if (data.all !== false) {
+                    this.socketWaitingForSegments.set(socket, true);
+                  }
+                } else {
+                  this.socketWaitingForSegments.set(socket, data.all !== false);
+                }
               }
             }
-          }
-        });
+          });
 
-        socket.on('disconnect', data => {
-          this.socketWaitingForSegments instanceof Map === true && this.socketWaitingForSegments.delete(socket);
-        });
+          socket.on('disconnect', data => {
+            this.socketWaitingForSegments instanceof Map === true && this.socketWaitingForSegments.delete(socket);
+          });
+
+          socket.emit('auth', true);
+        };
+
+        if (socket.authenticated === true) {
+          onAuthenticated();
+        } else {
+          socket.once('auth', (data = {}) => {
+            const { key } = data;
+
+            if (this.socketIoKey === key) {
+              onAuthenticated();
+            } else {
+              setTimeout(() => socket.disconnect(true), 5000);
+            }
+          });
+
+          socket.emit('auth', false);
+        }
       });
     }
 
@@ -230,6 +266,8 @@ module.exports = RED => {
       this.socketWaitingForSegments.clear();
 
       this.socketWaitingForSegments = undefined;
+
+      this.socketIoKey = undefined;
 
       if (Mp4fragNode.socketIoServer._nsps instanceof Map === true) {
         Mp4fragNode.socketIoServer._nsps.delete(this.namespace);
@@ -430,7 +468,7 @@ module.exports = RED => {
       if (sequence === 0) {
         const payload = {
           hlsPlaylist: this.hlsPlaylistPath,
-          socketIo: { path: SOCKET_IO_PATH, namespace: this.namespace },
+          socketIo: { path: SOCKET_IO_PATH, namespace: this.namespace, key: this.socketIoKey },
           mp4Video: this.mp4VideoPath,
         };
 
