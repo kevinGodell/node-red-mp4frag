@@ -5,7 +5,7 @@ const SocketIo = require('socket.io');
 const Mp4Frag = require('mp4frag');
 
 module.exports = RED => {
-  const { server, _ } = RED;
+  const { server, settings, _ } = RED;
 
   const { createNode, registerType } = RED.nodes;
 
@@ -283,7 +283,9 @@ module.exports = RED => {
 
       this.routePath = new RegExp(pattern, 'i');
 
-      RED.httpNode.get(this.routePath, (req, res) => {
+      const middleware = settings && settings.mp4frag && settings.mp4frag.middleware;
+
+      const endpoint = (req, res) => {
         if (typeof this.mp4frag === 'undefined') {
           return res.status(404).send(_('mp4frag.error.mp4frag_not_found', { basePath: this.basePath }));
         }
@@ -377,7 +379,13 @@ module.exports = RED => {
             res.end();
           });
         }
-      });
+      };
+
+      if (typeof middleware === 'function' && middleware.length === 3) {
+        RED.httpNode.get(this.routePath, middleware, endpoint);
+      } else {
+        RED.httpNode.get(this.routePath, endpoint);
+      }
     }
 
     destroyHttpRoute() {
