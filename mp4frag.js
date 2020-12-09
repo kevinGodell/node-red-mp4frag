@@ -4,6 +4,21 @@ const SocketIo = require('socket.io');
 
 const Mp4Frag = require('mp4frag');
 
+Mp4Frag.prototype.toJSON = function () {
+  return {
+    hlsPlaylistBase: this._hlsPlaylistBase,
+    hlsPlaylistInit: this._hlsPlaylistInit,
+    hlsPlaylistSize: this._hlsPlaylistSize,
+    hlsPlaylistExtra: this._hlsPlaylistExtra,
+    segmentCount: this._segmentCount,
+    sequence: this._sequence,
+    duration: this._duration,
+    audioCodec: this._audioCodec,
+    videoCodec: this._videoCodec,
+    timestamp: this._timestamp,
+  };
+};
+
 module.exports = RED => {
   const { server, settings, _ } = RED;
 
@@ -279,7 +294,7 @@ module.exports = RED => {
     createHttpRoute() {
       this.resWaitingForSegments = new Set();
 
-      const pattern = `^\/mp4frag\/${this.basePath}/(?:(hls.m3u8)|hls([0-9]+).m4s|(init-hls.mp4)|(hls.m3u8.txt)|(video.mp4))$`;
+      const pattern = `^\/mp4frag\/${this.basePath}/(?:(hls.m3u8)|hls([0-9]+).m4s|(init-hls.mp4)|(hls.m3u8.txt)|(video.mp4)|(api.json))$`;
 
       this.routePath = new RegExp(pattern, 'i');
 
@@ -378,6 +393,23 @@ module.exports = RED => {
 
             res.end();
           });
+
+          return;
+        }
+
+        if (params[5]) {
+          res.type('json');
+
+          res.send(
+            JSON.stringify(
+              {
+                payload: this.payload,
+                mp4frag: this.mp4frag,
+              },
+              null,
+              2
+            )
+          );
         }
       };
 
@@ -427,7 +459,9 @@ module.exports = RED => {
 
       this.destroyPaths();
 
-      this.send({ /* topic: 'set_source', */ payload: '' });
+      this.payload = '';
+
+      this.send({ /* topic: 'set_source', */ payload: this.payload });
     }
 
     onInput(msg) {
@@ -443,7 +477,9 @@ module.exports = RED => {
       if (typeof code !== 'undefined' || typeof signal !== 'undefined') {
         this.mp4frag.resetCache();
 
-        this.send({ /* topic: 'set_source', */ payload: '' });
+        this.payload = '';
+
+        this.send({ /* topic: 'set_source', */ payload: this.payload });
 
         return this.status({ fill: 'green', shape: 'ring', text: _('mp4frag.info.reset') });
       }
@@ -474,13 +510,13 @@ module.exports = RED => {
       const { segment, sequence, duration } = data;
 
       if (sequence === 0) {
-        const payload = {
+        this.payload = {
           hlsPlaylist: this.hlsPlaylistPath,
-          socketIo: { path: SOCKET_IO_PATH, namespace: this.namespace, key: this.socketIoKey },
           mp4Video: this.mp4VideoPath,
+          socketIo: { path: SOCKET_IO_PATH, namespace: this.namespace, key: this.socketIoKey },
         };
 
-        this.send({ /* topic: 'set_source', */ payload: payload });
+        this.send({ /* topic: 'set_source', */ payload: this.payload });
       }
 
       // trigger time range error
