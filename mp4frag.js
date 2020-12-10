@@ -6,16 +6,18 @@ const Mp4Frag = require('mp4frag');
 
 Mp4Frag.prototype.toJSON = function () {
   return {
-    hlsPlaylistBase: this._hlsPlaylistBase,
-    hlsPlaylistInit: this._hlsPlaylistInit,
-    hlsPlaylistSize: this._hlsPlaylistSize,
-    hlsPlaylistExtra: this._hlsPlaylistExtra,
+    hlsPlaylist: {
+      base: this._hlsPlaylistBase,
+      init: this._hlsPlaylistInit,
+      size: this._hlsPlaylistSize,
+      extra: this._hlsPlaylistExtra,
+    },
     segmentCount: this._segmentCount,
     sequence: this._sequence,
     duration: this._duration,
+    timestamp: this._timestamp,
     audioCodec: this._audioCodec,
     videoCodec: this._videoCodec,
-    timestamp: this._timestamp,
   };
 };
 
