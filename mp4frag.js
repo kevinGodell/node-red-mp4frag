@@ -415,7 +415,7 @@ module.exports = RED => {
         }
       };
 
-      if (typeof middleware === 'function' && middleware.length === 3) {
+      if (typeof middleware !== 'undefined') {
         RED.httpNode.get(this.routePath, middleware, endpoint);
       } else {
         RED.httpNode.get(this.routePath, endpoint);
