@@ -26,10 +26,6 @@ module.exports = RED => {
 
   const { createNode, registerType } = RED.nodes;
 
-  const NODE_TYPE = 'mp4frag';
-
-  const SOCKET_IO_PATH = '/mp4frag/socket.io';
-
   class Mp4fragNode {
     constructor(config) {
       createNode(this, config);
@@ -66,10 +62,14 @@ module.exports = RED => {
         throw new Error(_('mp4frag.error.base_path_invalid', { basePath: this.basePath }));
       }
 
-      const item = Mp4fragNode.basePathMap.get(this.basePath);
+      if (typeof Mp4fragNode.basePathMap === 'undefined') {
+        Mp4fragNode.basePathMap = new Map();
+      } else {
+        const item = Mp4fragNode.basePathMap.get(this.basePath);
 
-      if (typeof item !== 'undefined' && item !== this.id) {
-        throw new Error(_('mp4frag.error.base_path_duplicate', { basePath: this.basePath }));
+        if (typeof item !== 'undefined' && item !== this.id) {
+          throw new Error(_('mp4frag.error.base_path_duplicate', { basePath: this.basePath }));
+        }
       }
 
       Mp4fragNode.basePathMap.set(this.basePath, this.id);
@@ -132,7 +132,7 @@ module.exports = RED => {
     createSocketIoServer() {
       if (typeof Mp4fragNode.socketIoServer === 'undefined') {
         Mp4fragNode.socketIoServer = SocketIo(server, {
-          path: SOCKET_IO_PATH,
+          path: Mp4fragNode.socketIoPath,
           transports: ['websocket' /* , 'polling'*/],
         });
       }
@@ -249,6 +249,8 @@ module.exports = RED => {
         if (socket.authenticated === true) {
           onAuthenticated();
         } else {
+          // todo add timer waiting for auth response from client
+
           socket.once('auth', (data = {}) => {
             const { key } = data;
 
@@ -294,13 +296,19 @@ module.exports = RED => {
     }
 
     createHttpRoute() {
+      if (typeof Mp4fragNode.httpMiddleware === 'undefined') {
+        Mp4fragNode.httpMiddleware = (settings.mp4frag && settings.mp4frag.httpMiddleware) || null;
+
+        if (Mp4fragNode.httpMiddleware !== null) {
+          RED.httpNode.route('/mp4frag/:id/*').get(Mp4fragNode.httpMiddleware);
+        }
+      }
+
       this.resWaitingForSegments = new Set();
 
       const pattern = `^\/mp4frag\/${this.basePath}/(?:(hls.m3u8)|hls([0-9]+).m4s|(init-hls.mp4)|(hls.m3u8.txt)|(video.mp4)|(api.json))$`;
 
       this.routePath = new RegExp(pattern, 'i');
-
-      const middleware = settings && settings.mp4frag && settings.mp4frag.middleware;
 
       const endpoint = (req, res) => {
         if (typeof this.mp4frag === 'undefined') {
@@ -415,11 +423,7 @@ module.exports = RED => {
         }
       };
 
-      if (typeof middleware !== 'undefined') {
-        RED.httpNode.get(this.routePath, middleware, endpoint);
-      } else {
-        RED.httpNode.get(this.routePath, endpoint);
-      }
+      RED.httpNode.route(this.routePath).get(endpoint);
     }
 
     destroyHttpRoute() {
@@ -515,7 +519,7 @@ module.exports = RED => {
         this.payload = {
           hlsPlaylist: this.hlsPlaylistPath,
           mp4Video: this.mp4VideoPath,
-          socketIo: { path: SOCKET_IO_PATH, namespace: this.namespace, key: this.socketIoKey },
+          socketIo: { path: Mp4fragNode.socketIoPath, namespace: this.namespace, key: this.socketIoKey },
         };
 
         this.send({ /* topic: 'set_source', */ payload: this.payload });
@@ -572,11 +576,19 @@ module.exports = RED => {
     }
   }
 
-  Mp4fragNode.basePathMap = new Map();
-
   Mp4fragNode.basePathRegex = /^[a-z0-9_.]{1,50}$/i;
+
+  Mp4fragNode.basePathMap = undefined;
+
+  Mp4fragNode.socketIoPath = '/mp4frag/socket.io';
 
   Mp4fragNode.socketIoServer = undefined;
 
-  registerType(NODE_TYPE, Mp4fragNode);
+  Mp4fragNode.socketIoMiddleware = undefined;
+
+  Mp4fragNode.httpMiddleware = undefined;
+
+  Mp4fragNode.type = 'mp4frag';
+
+  registerType(Mp4fragNode.type, Mp4fragNode);
 };
