@@ -137,31 +137,43 @@ module.exports = RED => {
         });
       }
 
+      if (typeof Mp4fragNode.socketIoMiddleware === 'undefined') {
+        Mp4fragNode.socketIoMiddleware = (settings.mp4frag && settings.mp4frag.socketIoMiddleware) || null;
+      }
+
       this.socketIoKey = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 
       this.socketWaitingForSegments = new Map();
 
       this.socketIoServerOfNamespace = Mp4fragNode.socketIoServer.of(this.namespace);
 
-      this.socketIoServerOfNamespace.use((socket, next) => {
-        if (typeof socket.handshake.auth === 'object') {
-          if (this.socketIoKey !== socket.handshake.auth.key) {
-            const err = new Error('not authorized');
+      if (typeof Mp4fragNode.socketIoMiddleware === 'function') {
+        this.socketIoServerOfNamespace.use(Mp4fragNode.socketIoMiddleware);
+      } else if (Array.isArray(Mp4fragNode.socketIoMiddleware)) {
+        Mp4fragNode.socketIoMiddleware.forEach(middleware => {
+          this.socketIoServerOfNamespace.use(middleware);
+        });
+      } else {
+        this.socketIoServerOfNamespace.use((socket, next) => {
+          if (typeof socket.handshake.auth === 'object') {
+            if (this.socketIoKey !== socket.handshake.auth.key) {
+              const err = new Error('not authorized');
 
-            err.data = { reason: 'auth key invalid' };
+              err.data = { reason: 'auth key invalid' };
 
-            return setTimeout(() => {
-              next(err);
-            }, 5000);
+              return setTimeout(() => {
+                next(err);
+              }, 5000);
+            }
+
+            socket.authenticated = true;
+          } else {
+            socket.authenticated = false;
           }
 
-          socket.authenticated = true;
-        } else {
-          socket.authenticated = false;
-        }
-
-        next();
-      });
+          next();
+        });
+      }
 
       this.socketIoServerOfNamespace.on('connect' /* or connection */, socket => {
         // might send ack to verify round trip
