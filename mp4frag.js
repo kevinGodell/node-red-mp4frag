@@ -312,7 +312,7 @@ module.exports = RED => {
         Mp4fragNode.httpMiddleware = (settings.mp4frag && settings.mp4frag.httpMiddleware) || null;
 
         if (Mp4fragNode.httpMiddleware !== null) {
-          RED.httpNode.route('/mp4frag/:id/*').get(Mp4fragNode.httpMiddleware);
+          RED.httpNode.use('/:base(mp4frag)/:id', Mp4fragNode.httpMiddleware);
         }
       }
 
