@@ -138,7 +138,7 @@ module.exports = RED => {
       }
 
       if (typeof Mp4fragNode.socketIoMiddleware === 'undefined') {
-        Mp4fragNode.socketIoMiddleware = (settings.mp4frag && settings.mp4frag.socketIoMiddleware) || null;
+        Mp4fragNode.socketIoMiddleware = (settings.mp4frag && settings.mp4frag.ioMiddleware) || null;
       }
 
       this.socketIoKey = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
