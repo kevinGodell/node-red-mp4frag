@@ -32,7 +32,8 @@
     "mp4frag": "github:kevinGodell/mp4frag"
   },
   "peerDependencies": {
-    "socket.io": "^2.3.0 || ^3.0.3"
+    "socket.io": "^2.3.0 || ^3.0.3",
+    "express": "4"
   },
   "files": [
     "mp4frag.js",
