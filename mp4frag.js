@@ -2,6 +2,10 @@
 
 const SocketIo = require('socket.io');
 
+const { Router } = require('express');
+
+const { randomBytes } = require('crypto');
+
 const Mp4Frag = require('mp4frag');
 
 Mp4Frag.prototype.toJSON = function () {
@@ -141,7 +145,7 @@ module.exports = RED => {
         Mp4fragNode.socketIoMiddleware = (settings.mp4frag && settings.mp4frag.ioMiddleware) || null;
       }
 
-      this.socketIoKey = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+      this.socketIoKey = randomBytes(15).toString('hex');
 
       this.socketWaitingForSegments = new Map();
 
@@ -252,7 +256,7 @@ module.exports = RED => {
           });
 
           socket.on('disconnect', data => {
-            this.socketWaitingForSegments instanceof Map === true && this.socketWaitingForSegments.delete(socket);
+            this.socketWaitingForSegments instanceof Map && this.socketWaitingForSegments.delete(socket);
           });
 
           socket.emit('auth', true);
@@ -280,7 +284,7 @@ module.exports = RED => {
 
     destroySocketIoServer() {
       const sockets =
-        this.socketIoServerOfNamespace.sockets instanceof Map === true
+        this.socketIoServerOfNamespace.sockets instanceof Map
           ? this.socketIoServerOfNamespace.sockets
           : Object.values(this.socketIoServerOfNamespace.sockets);
 
@@ -300,7 +304,7 @@ module.exports = RED => {
 
       this.socketIoKey = undefined;
 
-      if (Mp4fragNode.socketIoServer._nsps instanceof Map === true) {
+      if (Mp4fragNode.socketIoServer._nsps instanceof Map) {
         Mp4fragNode.socketIoServer._nsps.delete(this.namespace);
       } else {
         Mp4fragNode.socketIoServer.nsps[this.namespace] = undefined;
@@ -308,17 +312,40 @@ module.exports = RED => {
     }
 
     createHttpRoute() {
-      if (typeof Mp4fragNode.httpMiddleware === 'undefined') {
+      if (typeof Mp4fragNode.router === 'undefined') {
+        Mp4fragNode.router = Router({ caseSensitive: true });
+
+        Mp4fragNode.router.mp4fragRouter = true;
+
         Mp4fragNode.httpMiddleware = (settings.mp4frag && settings.mp4frag.httpMiddleware) || null;
 
         if (Mp4fragNode.httpMiddleware !== null) {
-          RED.httpNode.use('/:base(mp4frag)/:id', Mp4fragNode.httpMiddleware);
+          Mp4fragNode.router.use(Mp4fragNode.httpMiddleware);
         }
+
+        Mp4fragNode.router.get('/', (req, res) => {
+          let basePathArray = Array.from(Mp4fragNode.basePathMap);
+
+          res.type('json').send(JSON.stringify(basePathArray, null, 2));
+
+          // todo filter response based on user level/access
+          /* const { access } = res.locals;
+
+          if (Array.isArray(access) === false || access.length === 0 || access.includes('all')) {
+            return res.type('json').send(JSON.stringify(basePathArray, null, 2));
+          }
+
+          basePathArray = basePathArray.filter(( el ) => access.includes( el[0] ));
+
+          res.type('json').send(JSON.stringify(basePathArray, null, 2));*/
+        });
+
+        RED.httpNode.use('/mp4frag', Mp4fragNode.router);
       }
 
       this.resWaitingForSegments = new Set();
 
-      const pattern = `^\/mp4frag\/${this.basePath}/(?:(hls.m3u8)|hls([0-9]+).m4s|(init-hls.mp4)|(hls.m3u8.txt)|(video.mp4)|(api.json))$`;
+      const pattern = `^\/${this.basePath}/(?:(hls.m3u8)|hls([0-9]+).m4s|(init-hls.mp4)|(hls.m3u8.txt)|(video.mp4)|(api.json))$`;
 
       this.routePath = new RegExp(pattern, 'i');
 
@@ -411,7 +438,7 @@ module.exports = RED => {
           this.resWaitingForSegments.add(res);
 
           res.once('close', () => {
-            this.resWaitingForSegments instanceof Set === true && this.resWaitingForSegments.delete(res);
+            this.resWaitingForSegments instanceof Set && this.resWaitingForSegments.delete(res);
 
             res.end();
           });
@@ -422,20 +449,11 @@ module.exports = RED => {
         if (params[5]) {
           res.type('json');
 
-          res.send(
-            JSON.stringify(
-              {
-                payload: this.payload,
-                mp4frag: this.mp4frag,
-              },
-              null,
-              2
-            )
-          );
+          res.send(JSON.stringify({ payload: this.payload, mp4frag: this.mp4frag }, null, 2));
         }
       };
 
-      RED.httpNode.route(this.routePath).get(endpoint);
+      Mp4fragNode.router.route(this.routePath).get(endpoint);
     }
 
     destroyHttpRoute() {
@@ -451,17 +469,34 @@ module.exports = RED => {
 
       this.resWaitingForSegments = undefined;
 
-      const { stack } = RED.httpNode._router;
+      const { stack } = Mp4fragNode.router;
 
       for (let i = stack.length - 1; i >= 0; --i) {
         const layer = stack[i];
 
-        if (layer.route && layer.route.path === this.routePath) {
+        const path = layer.route && layer.route.path;
+
+        if (typeof path !== 'undefined' && path === this.routePath) {
           stack.splice(i, 1);
 
           break;
         }
       }
+
+      /* const { stack } = RED.httpNode._router;
+
+      for (let i = stack.length - 1; i >= 0; --i) {
+        const layer = stack[i];
+
+        if (layer.name === 'router' && layer.handle && layer.handle.mp4fragRouter === true) {
+
+          // remove router
+          stack.splice(i, 1);
+
+          break;
+        }
+
+      }*/
     }
 
     destroy() {
@@ -601,6 +636,8 @@ module.exports = RED => {
   Mp4fragNode.httpMiddleware = undefined;
 
   Mp4fragNode.type = 'mp4frag';
+
+  Mp4fragNode.router = undefined;
 
   registerType(Mp4fragNode.type, Mp4fragNode);
 };
