@@ -518,10 +518,52 @@ module.exports = RED => {
     }
 
     onInput(msg) {
-      const { payload } = msg;
+      const { payload, topic } = msg;
 
       if (Buffer.isBuffer(payload) === true) {
         return this.mp4frag.write(payload);
+      }
+
+      if (typeof topic === 'string') {
+        switch (topic) {
+          case 'start':
+            {
+              const { initialization } = this.mp4frag;
+
+              if (Buffer.isBuffer(initialization)) {
+                const msg = { topic: 'start', payload: initialization };
+
+                this.send([null, msg]);
+
+                this.flowing = true;
+              }
+            }
+            break;
+          case 'start_buffered':
+            {
+              const { buffer } = this.mp4frag;
+
+              if (Buffer.isBuffer(buffer)) {
+                const msg = { topic: 'start', payload: buffer };
+
+                this.send([null, msg]);
+
+                this.flowing = true;
+              }
+            }
+            break;
+          case 'stop':
+          default:
+            {
+              const msg = { topic: 'stop' };
+
+              this.send([null, msg]);
+
+              this.flowing = false;
+            }
+            break;
+        }
+        return;
       }
 
       const { code, signal } = payload;
@@ -599,6 +641,10 @@ module.exports = RED => {
             res.flush();
           }
         });
+      }
+
+      if (this.flowing === true) {
+        this.send([null, { topic: 'continue', payload: segment }]);
       }
 
       this.status({ fill: 'green', shape: 'dot', text: _('mp4frag.info.segment', { sequence, duration }) });

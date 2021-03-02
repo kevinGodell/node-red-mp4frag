@@ -50,8 +50,8 @@
       }
       return `/mp4frag/${this.basePath}/`;
     },
-    outputLabels: 'status',
-    outputs: 1,
+    outputLabels: ['playlist', 'buffer'],
+    outputs: 2,
     oneditprepare: function () {
       $('#node-input-hlsPlaylistSize').typedInput({
         types: [
