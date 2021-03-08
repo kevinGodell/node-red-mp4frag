@@ -6,6 +6,8 @@ const { Router } = require('express');
 
 const { randomBytes } = require('crypto');
 
+const { createWriteStream, mkdir, mkdtemp } = require('fs');
+
 const Mp4Frag = require('mp4frag');
 
 Mp4Frag.prototype.toJSON = function () {
@@ -520,7 +522,7 @@ module.exports = RED => {
     onInput(msg) {
       const { payload, topic } = msg;
 
-      if (Buffer.isBuffer(payload) === true) {
+      if (Buffer.isBuffer(payload)) {
         return this.mp4frag.write(payload);
       }
 
@@ -528,38 +530,52 @@ module.exports = RED => {
         switch (topic) {
           case 'start':
             {
-              const { initialization } = this.mp4frag;
+              const { lastKeyframeBuffer } = this.mp4frag;
 
-              if (Buffer.isBuffer(initialization)) {
-                const msg = { topic: 'start', payload: initialization };
+              if (Buffer.isBuffer(lastKeyframeBuffer)) {
+                // const msg = { topic: 'start', payload: initialization };
 
-                this.send([null, msg]);
+                // this.send([null, msg]);
 
-                this.flowing = true;
+                // this.flowing = true;
+                this.writestream = createWriteStream(`${Date.now()}.mp4`);
+
+                this.writestream.write(lastKeyframeBuffer);
+
+                this.writing = true;
               }
             }
             break;
           case 'start_buffered':
             {
-              const { buffer } = this.mp4frag;
+              const { firstKeyframeBuffer } = this.mp4frag;
 
-              if (Buffer.isBuffer(buffer)) {
-                const msg = { topic: 'start', payload: buffer };
+              if (Buffer.isBuffer(firstKeyframeBuffer)) {
+                /* const msg = { topic: 'start', payload: buffer };
 
                 this.send([null, msg]);
 
-                this.flowing = true;
+                this.flowing = true;*/
+
+                this.writestream = createWriteStream(`${Date.now()}.mp4`);
+
+                this.writestream.write(firstKeyframeBuffer);
+
+                this.writing = true;
               }
             }
             break;
           case 'stop':
           default:
             {
-              const msg = { topic: 'stop' };
+              // const msg = { topic: 'stop' };
 
-              this.send([null, msg]);
+              // this.send([null, msg]);
 
-              this.flowing = false;
+              // this.flowing = false;
+              this.writing = false;
+
+              this.writestream.end();
             }
             break;
         }
@@ -643,9 +659,13 @@ module.exports = RED => {
         });
       }
 
-      if (this.flowing === true) {
-        this.send([null, { topic: 'continue', payload: segment }]);
+      if (this.writing === true && this.writestream) {
+        this.writestream.write(segment);
       }
+
+      /* if (this.flowing === true) {
+        this.send([null, { topic: 'continue', payload: segment }]);
+      }*/
 
       this.status({ fill: 'green', shape: 'dot', text: _('mp4frag.info.segment', { sequence, duration }) });
     }
