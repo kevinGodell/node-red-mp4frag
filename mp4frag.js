@@ -525,17 +525,23 @@ module.exports = RED => {
       }
 
       if (typeof topic === 'string') {
+        this.writing = false;
+
+        this.filename = undefined;
+
         switch (topic) {
           case 'start':
             {
               const { lastKeyframeBuffer } = this.mp4frag;
 
               if (Buffer.isBuffer(lastKeyframeBuffer)) {
-                this.writing = true;
+                const filename = `${Date.now()}.mp4`;
 
-                this.filename = `${Date.now()}.mp4`;
+                this.send([null, { payload: lastKeyframeBuffer, filename }]);
 
-                this.send([null, { payload: lastKeyframeBuffer, filename: this.filename }]);
+                this.writing = true; // must be after send
+
+                this.filename = filename;
               }
             }
             break;
@@ -544,11 +550,13 @@ module.exports = RED => {
               const { firstKeyframeBuffer } = this.mp4frag;
 
               if (Buffer.isBuffer(firstKeyframeBuffer)) {
+                const filename = `${Date.now()}.mp4`;
+
+                this.send([null, { payload: firstKeyframeBuffer, filename }]);
+
                 this.writing = true;
 
-                this.filename = `${Date.now()}.mp4`;
-
-                this.send([null, { payload: firstKeyframeBuffer, filename: this.filename }]);
+                this.filename = filename;
               }
             }
             break;
