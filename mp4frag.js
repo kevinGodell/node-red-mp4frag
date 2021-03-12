@@ -6,8 +6,6 @@ const { Router } = require('express');
 
 const { randomBytes } = require('crypto');
 
-const { createWriteStream, mkdir, mkdtemp } = require('fs');
-
 const Mp4Frag = require('mp4frag');
 
 Mp4Frag.prototype.toJSON = function () {
@@ -533,16 +531,11 @@ module.exports = RED => {
               const { lastKeyframeBuffer } = this.mp4frag;
 
               if (Buffer.isBuffer(lastKeyframeBuffer)) {
-                // const msg = { topic: 'start', payload: initialization };
-
-                // this.send([null, msg]);
-
-                // this.flowing = true;
-                this.writestream = createWriteStream(`${Date.now()}.mp4`);
-
-                this.writestream.write(lastKeyframeBuffer);
-
                 this.writing = true;
+
+                this.filename = `${Date.now()}.mp4`;
+
+                this.send([null, { payload: lastKeyframeBuffer, filename: this.filename }]);
               }
             }
             break;
@@ -551,31 +544,20 @@ module.exports = RED => {
               const { firstKeyframeBuffer } = this.mp4frag;
 
               if (Buffer.isBuffer(firstKeyframeBuffer)) {
-                /* const msg = { topic: 'start', payload: buffer };
-
-                this.send([null, msg]);
-
-                this.flowing = true;*/
-
-                this.writestream = createWriteStream(`${Date.now()}.mp4`);
-
-                this.writestream.write(firstKeyframeBuffer);
-
                 this.writing = true;
+
+                this.filename = `${Date.now()}.mp4`;
+
+                this.send([null, { payload: firstKeyframeBuffer, filename: this.filename }]);
               }
             }
             break;
           case 'stop':
           default:
             {
-              // const msg = { topic: 'stop' };
-
-              // this.send([null, msg]);
-
-              // this.flowing = false;
               this.writing = false;
 
-              this.writestream.end();
+              this.filename = undefined;
             }
             break;
         }
@@ -627,7 +609,7 @@ module.exports = RED => {
           socketIo: { path: Mp4fragNode.socketIoPath, namespace: this.namespace, key: this.socketIoKey },
         };
 
-        this.send({ /* topic: 'set_source', */ payload: this.payload });
+        this.send({ payload: this.payload });
       }
 
       // trigger time range error
@@ -659,13 +641,9 @@ module.exports = RED => {
         });
       }
 
-      if (this.writing === true && this.writestream) {
-        this.writestream.write(segment);
+      if (this.writing === true && typeof this.filename === 'string') {
+        this.send([null, { payload: segment, filename: this.filename }]);
       }
-
-      /* if (this.flowing === true) {
-        this.send([null, { topic: 'continue', payload: segment }]);
-      }*/
 
       this.status({ fill: 'green', shape: 'dot', text: _('mp4frag.info.segment', { sequence, duration }) });
     }
