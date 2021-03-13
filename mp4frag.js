@@ -518,54 +518,58 @@ module.exports = RED => {
     }
 
     onInput(msg) {
-      const { payload, write } = msg;
+      const { payload, action } = msg;
 
       if (Buffer.isBuffer(payload)) {
         return this.mp4frag.write(payload);
       }
 
-      if (typeof write === 'object') {
-        this.writing = false;
+      if (typeof action === 'object') {
+        const { subject } = action;
 
-        this.filename = undefined;
+        if (subject === 'write') {
+          this.writing = false;
 
-        const { command = 'stop', keyframe = 'last', filename = `${Date.now()}.mp4` } = write;
+          this.filename = undefined;
 
-        if (command === 'start') {
-          switch (keyframe) {
-            case 'last':
-              const { lastKeyframeBuffer } = this.mp4frag;
+          const { command = 'stop', keyframe = 'last', filename = `${Date.now()}.mp4` } = action;
 
-              if (Buffer.isBuffer(lastKeyframeBuffer)) {
-                this.send([null, { payload: lastKeyframeBuffer, filename }]);
+          if (command === 'start') {
+            switch (keyframe) {
+              case 'last':
+                const { lastKeyframeBuffer } = this.mp4frag;
 
-                this.writing = true; // must be after send
+                if (Buffer.isBuffer(lastKeyframeBuffer)) {
+                  this.send([null, { payload: lastKeyframeBuffer, filename }]);
 
-                this.filename = filename;
-              }
-              break;
+                  this.writing = true; // must be after send
 
-            case 'first':
-              const { firstKeyframeBuffer } = this.mp4frag;
+                  this.filename = filename;
+                }
+                break;
 
-              if (Buffer.isBuffer(firstKeyframeBuffer)) {
-                this.send([null, { payload: firstKeyframeBuffer, filename }]);
+              case 'first':
+                const { firstKeyframeBuffer } = this.mp4frag;
 
-                this.writing = true;
+                if (Buffer.isBuffer(firstKeyframeBuffer)) {
+                  this.send([null, { payload: firstKeyframeBuffer, filename }]);
 
-                this.filename = filename;
-              }
-              break;
+                  this.writing = true;
 
-            default:
-              if (Number.isInteger(keyframe)) {
-                /*
-                  todo
-                  need to build indexing into mp4frag
-                  positive int will be from first
-                  negative int will be from last
-                */
-              }
+                  this.filename = filename;
+                }
+                break;
+
+              default:
+                if (Number.isInteger(keyframe)) {
+                  /*
+                    todo
+                    need to build indexing into mp4frag
+                    positive int will be from first
+                    negative int will be from last
+                  */
+                }
+            }
           }
         }
         return;
