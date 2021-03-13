@@ -39,19 +39,30 @@
       },
       ffmpegRemaster: {
         value: true,
-        required: true,
+        validate: function (ffmpegRemaster) {
+          return typeof ffmpegRemaster === 'boolean';
+        },
       },
       ffmpegGlobal: {
         value: '-loglevel quiet',
         required: false,
+        validate: function (ffmpegGlobal) {
+          return typeof ffmpegGlobal === 'string';
+        },
       },
       ffmpegInput: {
         value: '-f mp4',
         required: false,
+        validate: function (ffmpegInput) {
+          return typeof ffmpegInput === 'string';
+        },
       },
       ffmpegOutput: {
         value: '-f mp4 -c copy -movflags +faststart+empty_moov',
         required: false,
+        validate: function (ffmpegOutput) {
+          return typeof ffmpegOutput === 'string';
+        },
       },
     },
     icon: 'font-awesome/fa-file-video-o',
@@ -61,16 +72,38 @@
       if (this.name) {
         return this.name;
       }
-      if (this.valid === false && this.validationErrors.includes('basePath')) {
-        return `/mp4frag/${this.id}/`;
+
+      if (this.valid || (Array.isArray(this.validationErrors) && this.validationErrors.includes('basePath') === false)) {
+        return `/mp4frag/${this.basePath}`;
       }
-      return `/mp4frag/${this.basePath}/`;
+
+      return this.type;
     },
     outputLabels: ['playlist', 'buffer'],
     outputs: 2,
     oneditprepare: function () {
+      // migration code start
+
+      if (typeof this.ffmpegRemaster === 'undefined') {
+        this.ffmpegRemaster = this._def.defaults.ffmpegRemaster.value;
+      }
+
+      if (typeof this.ffmpegGlobal === 'undefined') {
+        $('#node-input-ffmpegGlobal').val(this._def.defaults.ffmpegGlobal.value);
+      }
+
+      if (typeof this.ffmpegInput === 'undefined') {
+        $('#node-input-ffmpegInput').val(this._def.defaults.ffmpegInput.value);
+      }
+
+      if (typeof this.ffmpegOutput === 'undefined') {
+        $('#node-input-ffmpegOutput').val(this._def.defaults.ffmpegOutput.value);
+      }
+
+      // migration code end
+
       $('#mp4fragFfmpegPath')
-        .val(RED.settings.mp4frag.ffmpegPath)
+        .val(RED.settings.mp4fragFfmpegPath)
         .prop('readonly', true)
         .on('click', () => {
           RED.notify(this._('mp4frag.warning.ffmpeg_path'), { type: 'warning', id: 'mp4frag' });
@@ -99,7 +132,7 @@
         ],
       });
 
-      const basePath = $('#node-input-basePath')
+      $('#node-input-basePath')
         .prop('placeholder', this.id)
         .on('input', function () {
           const newVal = this.value.replace(/[^a-z0-9_.]/gi, '');
@@ -107,10 +140,6 @@
             this.value = newVal;
           }
         });
-
-      if (basePath.val() === '') {
-        basePath.val(this.id);
-      }
 
       $('#node-input-ffmpegRemaster-container')
         .typedInput({ types: ['bool'] })

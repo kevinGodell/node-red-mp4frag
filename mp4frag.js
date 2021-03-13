@@ -1,6 +1,6 @@
 'use strict';
 
-const SocketIo = require('socket.io');
+const Io = require('socket.io');
 
 const { Router } = require('express');
 
@@ -9,10 +9,6 @@ const { randomBytes } = require('crypto');
 const { spawn } = require('child_process');
 
 const Mp4Frag = require('mp4frag');
-
-const {
-  mp4frag: { ffmpegPath = 'ffmpeg' },
-} = RED.settings;
 
 Mp4Frag.prototype.toJSON = function () {
   return {
@@ -33,6 +29,10 @@ Mp4Frag.prototype.toJSON = function () {
 
 module.exports = RED => {
   const { server, settings, _ } = RED;
+
+  const {
+    mp4frag: { ffmpegPath = 'ffmpeg', httpMiddleware = null, ioMiddleware = null },
+  } = settings;
 
   const { createNode, registerType } = RED.nodes;
 
@@ -61,7 +61,7 @@ module.exports = RED => {
 
         this.createHttpRoute();
 
-        this.createSocketIoServer();
+        this.createIoServer();
 
         this.on('input', this.onInput);
 
@@ -147,34 +147,34 @@ module.exports = RED => {
       return func;
     }
 
-    createSocketIoServer() {
-      if (typeof Mp4fragNode.socketIoServer === 'undefined') {
-        Mp4fragNode.socketIoServer = SocketIo(server, {
-          path: Mp4fragNode.socketIoPath,
+    createIoServer() {
+      if (typeof Mp4fragNode.ioServer === 'undefined') {
+        Mp4fragNode.ioServer = Io(server, {
+          path: Mp4fragNode.ioPath,
           transports: ['websocket' /* , 'polling'*/],
         });
       }
 
-      if (typeof Mp4fragNode.socketIoMiddleware === 'undefined') {
-        Mp4fragNode.socketIoMiddleware = (settings.mp4frag && settings.mp4frag.ioMiddleware) || null;
+      if (typeof Mp4fragNode.ioMiddleware === 'undefined') {
+        Mp4fragNode.ioMiddleware = ioMiddleware;
       }
 
-      this.socketIoKey = randomBytes(15).toString('hex');
+      this.ioKey = randomBytes(15).toString('hex');
 
-      this.socketWaitingForSegments = new Map();
+      this.ioSocketWaitingForSegments = new Map();
 
-      this.socketIoServerOfNamespace = Mp4fragNode.socketIoServer.of(this.namespace);
+      this.ioServerOfNamespace = Mp4fragNode.ioServer.of(this.namespace);
 
-      if (typeof Mp4fragNode.socketIoMiddleware === 'function') {
-        this.socketIoServerOfNamespace.use(Mp4fragNode.socketIoMiddleware);
-      } else if (Array.isArray(Mp4fragNode.socketIoMiddleware)) {
-        Mp4fragNode.socketIoMiddleware.forEach(middleware => {
-          this.socketIoServerOfNamespace.use(middleware);
+      if (typeof Mp4fragNode.ioMiddleware === 'function') {
+        this.ioServerOfNamespace.use(Mp4fragNode.ioMiddleware);
+      } else if (Array.isArray(Mp4fragNode.ioMiddleware)) {
+        Mp4fragNode.ioMiddleware.forEach(middleware => {
+          this.ioServerOfNamespace.use(middleware);
         });
       } else {
-        this.socketIoServerOfNamespace.use((socket, next) => {
+        this.ioServerOfNamespace.use((socket, next) => {
           if (typeof socket.handshake.auth === 'object') {
-            if (this.socketIoKey !== socket.handshake.auth.key) {
+            if (this.ioKey !== socket.handshake.auth.key) {
               const err = new Error('not authorized');
 
               err.data = { reason: 'auth key invalid' };
@@ -193,7 +193,7 @@ module.exports = RED => {
         });
       }
 
-      this.socketIoServerOfNamespace.on('connect' /* or connection */, socket => {
+      this.ioServerOfNamespace.on('connect' /* or connection */, socket => {
         // might send ack to verify round trip
 
         // connect -> auth -> mime -> initialization -> segments...
@@ -238,7 +238,7 @@ module.exports = RED => {
               if (segmentObject.timestamp > data.timestamp) {
                 socket.emit('segment', segmentObject);
               } else {
-                this.socketWaitingForSegments.set(socket, false);
+                this.ioSocketWaitingForSegments.set(socket, false);
               }
             } else {
               if (data.buffered === true) {
@@ -248,10 +248,10 @@ module.exports = RED => {
                   socket.emit('segment', { segment: segmentList, duration, timestamp, sequence });
 
                   if (data.all !== false) {
-                    this.socketWaitingForSegments.set(socket, true);
+                    this.ioSocketWaitingForSegments.set(socket, true);
                   }
                 } else {
-                  this.socketWaitingForSegments.set(socket, data.all !== false);
+                  this.ioSocketWaitingForSegments.set(socket, data.all !== false);
                 }
               } else {
                 const { segmentObject } = this.mp4frag;
@@ -260,17 +260,17 @@ module.exports = RED => {
                   socket.emit('segment', segmentObject);
 
                   if (data.all !== false) {
-                    this.socketWaitingForSegments.set(socket, true);
+                    this.ioSocketWaitingForSegments.set(socket, true);
                   }
                 } else {
-                  this.socketWaitingForSegments.set(socket, data.all !== false);
+                  this.ioSocketWaitingForSegments.set(socket, data.all !== false);
                 }
               }
             }
           });
 
           socket.on('disconnect', data => {
-            this.socketWaitingForSegments instanceof Map && this.socketWaitingForSegments.delete(socket);
+            this.ioSocketWaitingForSegments instanceof Map && this.ioSocketWaitingForSegments.delete(socket);
           });
 
           socket.emit('auth', true);
@@ -284,7 +284,7 @@ module.exports = RED => {
           socket.once('auth', (data = {}) => {
             const { key } = data;
 
-            if (this.socketIoKey === key) {
+            if (this.ioKey === key) {
               onAuthenticated();
             } else {
               setTimeout(() => socket.disconnect(true), 5000);
@@ -296,11 +296,11 @@ module.exports = RED => {
       });
     }
 
-    destroySocketIoServer() {
+    destroyIoServer() {
       const sockets =
-        this.socketIoServerOfNamespace.sockets instanceof Map
-          ? this.socketIoServerOfNamespace.sockets
-          : Object.values(this.socketIoServerOfNamespace.sockets);
+        this.ioServerOfNamespace.sockets instanceof Map
+          ? this.ioServerOfNamespace.sockets
+          : Object.values(this.ioServerOfNamespace.sockets);
 
       sockets.forEach(socket => {
         if (socket.connected === true) {
@@ -308,20 +308,20 @@ module.exports = RED => {
         }
       });
 
-      this.socketIoServerOfNamespace.removeAllListeners();
+      this.ioServerOfNamespace.removeAllListeners();
 
-      this.socketIoServerOfNamespace = undefined;
+      this.ioServerOfNamespace = undefined;
 
-      this.socketWaitingForSegments.clear();
+      this.ioSocketWaitingForSegments.clear();
 
-      this.socketWaitingForSegments = undefined;
+      this.ioSocketWaitingForSegments = undefined;
 
-      this.socketIoKey = undefined;
+      this.ioKey = undefined;
 
-      if (Mp4fragNode.socketIoServer._nsps instanceof Map) {
-        Mp4fragNode.socketIoServer._nsps.delete(this.namespace);
+      if (Mp4fragNode.ioServer._nsps instanceof Map) {
+        Mp4fragNode.ioServer._nsps.delete(this.namespace);
       } else {
-        Mp4fragNode.socketIoServer.nsps[this.namespace] = undefined;
+        Mp4fragNode.ioServer.nsps[this.namespace] = undefined;
       }
     }
 
@@ -331,7 +331,7 @@ module.exports = RED => {
 
         Mp4fragNode.router.mp4fragRouter = true;
 
-        Mp4fragNode.httpMiddleware = (settings.mp4frag && settings.mp4frag.httpMiddleware) || null;
+        Mp4fragNode.httpMiddleware = httpMiddleware;
 
         if (Mp4fragNode.httpMiddleware !== null) {
           Mp4fragNode.router.use(Mp4fragNode.httpMiddleware);
@@ -520,7 +520,7 @@ module.exports = RED => {
 
       this.destroyHttpRoute();
 
-      this.destroySocketIoServer();
+      this.destroyIoServer();
 
       this.destroyMp4frag();
 
@@ -631,7 +631,7 @@ module.exports = RED => {
         this.payload = {
           hlsPlaylist: this.hlsPlaylistPath,
           mp4Video: this.mp4VideoPath,
-          socketIo: { path: Mp4fragNode.socketIoPath, namespace: this.namespace, key: this.socketIoKey },
+          socketIo: { path: Mp4fragNode.ioPath, namespace: this.namespace, key: this.ioKey },
         };
 
         this.send({ payload: this.payload });
@@ -642,16 +642,16 @@ module.exports = RED => {
         return;
       }*/
 
-      if (this.socketWaitingForSegments.size > 0) {
-        this.socketWaitingForSegments.forEach((all, socket, map) => {
+      if (this.ioSocketWaitingForSegments.size > 0) {
+        this.ioSocketWaitingForSegments.forEach((all, socket, map) => {
           if (socket.connected === true) {
             socket.emit('segment', data);
 
             if (all === false) {
-              this.socketWaitingForSegments.delete(socket);
+              this.ioSocketWaitingForSegments.delete(socket);
             }
           } else {
-            this.socketWaitingForSegments.delete(socket);
+            this.ioSocketWaitingForSegments.delete(socket);
           }
         });
       }
@@ -701,11 +701,11 @@ module.exports = RED => {
 
   Mp4fragNode.basePathMap = undefined;
 
-  Mp4fragNode.socketIoPath = '/mp4frag/socket.io';
+  Mp4fragNode.ioPath = '/mp4frag/socket.io';
 
-  Mp4fragNode.socketIoServer = undefined;
+  Mp4fragNode.ioServer = undefined;
 
-  Mp4fragNode.socketIoMiddleware = undefined;
+  Mp4fragNode.ioMiddleware = undefined;
 
   Mp4fragNode.httpMiddleware = undefined;
 
@@ -715,8 +715,9 @@ module.exports = RED => {
 
   const Mp4fragMeta = {
     settings: {
-      mp4frag: {
-        ffmpegPath: { value: ffmpegPath, exportable: true },
+      mp4fragFfmpegPath: {
+        value: ffmpegPath,
+        exportable: true,
       },
     },
   };
