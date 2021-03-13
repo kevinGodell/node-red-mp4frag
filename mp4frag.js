@@ -6,7 +6,13 @@ const { Router } = require('express');
 
 const { randomBytes } = require('crypto');
 
+const { spawn } = require('child_process');
+
 const Mp4Frag = require('mp4frag');
+
+const {
+  mp4frag: { ffmpegPath = 'ffmpeg' },
+} = RED.settings;
 
 Mp4Frag.prototype.toJSON = function () {
   return {
@@ -39,6 +45,14 @@ module.exports = RED => {
       this.hlsPlaylistSize = config.hlsPlaylistSize;
 
       this.hlsPlaylistExtra = config.hlsPlaylistExtra;
+
+      this.ffmpegRemaster = config.ffmpegRemaster;
+
+      this.ffmpegGlobal = config.ffmpegGlobal;
+
+      this.ffmpegInput = config.ffmpegInput;
+
+      this.ffmpegOutput = config.ffmpegOutput;
 
       try {
         this.createPaths(); // throws
@@ -653,6 +667,11 @@ module.exports = RED => {
       }
 
       if (this.writing === true && typeof this.filename === 'string') {
+        // todo write to spawned ffmpeg or send raw buffer to next node
+        /* if (typeof this.ffmpegSpawn === 'object') {
+
+        }*/
+
         this.send([null, { payload: segment, filename: this.filename }]);
       }
 
@@ -694,5 +713,13 @@ module.exports = RED => {
 
   Mp4fragNode.router = undefined;
 
-  registerType(Mp4fragNode.type, Mp4fragNode);
+  const Mp4fragMeta = {
+    settings: {
+      mp4frag: {
+        ffmpegPath: { value: ffmpegPath, exportable: true },
+      },
+    },
+  };
+
+  registerType(Mp4fragNode.type, Mp4fragNode, Mp4fragMeta);
 };

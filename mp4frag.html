@@ -37,6 +37,22 @@
         required: true,
         validate: RED.validators.regex(/^[a-z0-9_.]{1,50}$/i),
       },
+      ffmpegRemaster: {
+        value: true,
+        required: true,
+      },
+      ffmpegGlobal: {
+        value: '-loglevel quiet',
+        required: false,
+      },
+      ffmpegInput: {
+        value: '-f mp4',
+        required: false,
+      },
+      ffmpegOutput: {
+        value: '-f mp4 -c copy -movflags +faststart+empty_moov',
+        required: false,
+      },
     },
     icon: 'font-awesome/fa-file-video-o',
     inputLabels: 'buffer',
@@ -53,6 +69,14 @@
     outputLabels: ['playlist', 'buffer'],
     outputs: 2,
     oneditprepare: function () {
+      $('#mp4fragFfmpegPath')
+        .val(RED.settings.mp4frag.ffmpegPath)
+        .prop('readonly', true)
+        .on('click', () => {
+          RED.notify(this._('mp4frag.warning.ffmpeg_path'), { type: 'warning', id: 'mp4frag' });
+          // type/color: error = red, warning = orange, success = green, '' = blue
+        });
+
       $('#node-input-hlsPlaylistSize').typedInput({
         types: [
           {
@@ -88,6 +112,10 @@
         basePath.val(this.id);
       }
 
+      $('#node-input-ffmpegRemaster-container')
+        .typedInput({ types: ['bool'] })
+        .typedInput('value', this.ffmpegRemaster);
+
       $('<button type="button" class="red-ui-button red-ui-button-small"><i class="fa fa-book"></i> help</button>')
         .on('click', () => {
           RED.sidebar.help.show('mp4frag');
@@ -120,6 +148,34 @@
     <div class="form-row">
       <label for="node-input-basePath"><i class="fa fa-globe"></i> URL</label>
       <code> /mp4frag/<input style="width:auto;text-align:center;" type="text" id="node-input-basePath" />/{resource} </code>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>FFmpeg Options</legend>
+    <div class="form-row">
+      <label for="node-input-ffmpegRemaster-container"><i class="fa fa-play"></i> Remaster</label>
+      <input type="text" id="node-input-ffmpegRemaster-container" />
+    </div>
+
+    <div class="form-row">
+      <label for="mp4fragFfmpegPath"><i class="fa fa-picture-o"></i> Path</label>
+      <input type="text" id="mp4fragFfmpegPath" />
+    </div>
+
+    <div class="form-row">
+      <label for="node-input-ffmpegGlobal"><i class="fa fa-picture-o"></i> Global</label>
+      <input type="text" id="node-input-ffmpegGlobal" />
+    </div>
+
+    <div class="form-row">
+      <label for="node-input-ffmpegInput"><i class="fa fa-picture-o"></i> Input</label>
+      <input type="text" id="node-input-ffmpegInput" />
+    </div>
+
+    <div class="form-row">
+      <label for="node-input-ffmpegOutput"><i class="fa fa-picture-o"></i> Output</label>
+      <input type="text" id="node-input-ffmpegOutput" />
     </div>
   </fieldset>
 </script>

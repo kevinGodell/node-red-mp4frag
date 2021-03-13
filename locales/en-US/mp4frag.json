@@ -13,7 +13,8 @@
     },
     "success": {},
     "warning": {
-      "unknown_payload": "unknown payload \"__payload__\""
+      "unknown_payload": "unknown payload \"__payload__\"",
+      "ffmpeg_path": "Add property <strong>mp4frag.ffmpegPath</strong> to <em>settings.js</em><hr/><code class=\"form-tips\">mp4frag.ffmpegPath: '/path/to/ffmpeg'</code>"
     },
     "error": {
       "base_path_invalid": "basePath \"__basePath__\" is invalid",
