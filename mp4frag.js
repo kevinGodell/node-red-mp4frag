@@ -513,6 +513,10 @@ module.exports = RED => {
       }*/
     }
 
+    spawnFfmpeg() {}
+
+    destroyFfmpeg() {}
+
     destroy() {
       this.removeListener('input', this.onInput);
 
@@ -525,6 +529,8 @@ module.exports = RED => {
       this.destroyMp4frag();
 
       this.destroyPaths();
+
+      this.destroyFfmpeg();
 
       this.payload = '';
 
@@ -546,43 +552,68 @@ module.exports = RED => {
 
           this.filename = undefined;
 
+          if (this.ffmpegSpawn) {
+            console.log(typeof this.ffmpegSpawn);
+
+            this.ffmpegSpawn.kill();
+
+            this.ffmpegSpawn = undefined;
+          }
+
           const { command = 'stop', keyframe = 'last', filename = `${Date.now()}.mp4` } = action;
 
           if (command === 'start') {
-            switch (keyframe) {
-              case 'last':
-                const { lastKeyframeBuffer } = this.mp4frag;
+            let payload;
 
-                if (Buffer.isBuffer(lastKeyframeBuffer)) {
-                  this.send([null, { payload: lastKeyframeBuffer, filename }]);
+            if (keyframe === 'last') {
+              payload = this.mp4frag.lastKeyframeBuffer;
+            } else if (keyframe === 'first') {
+              payload = this.mp4frag.firstKeyframeBuffer;
+            } else if (Number.isInteger(keyframe)) {
+              // payload = this.mp4frag.getKeyframeBuffer(keyframe);
+              /*
+                todo
+                need to build indexing into mp4frag
+                positive int will be from first
+                negative int will be from last
+              */
+            } else {
+              console.log('invalid selection');
+              return;
+            }
 
-                  this.writing = true; // must be after send
+            if (Buffer.isBuffer(payload)) {
+              if (this.ffmpegRemaster === true) {
+                this.ffmpegSpawn = spawn(ffmpegPath, [
+                  '-loglevel',
+                  'quiet',
+                  '-f',
+                  'mp4',
+                  '-i',
+                  'pipe:0',
+                  '-f',
+                  'mp4',
+                  '-c',
+                  'copy',
+                  '-movflags',
+                  '+faststart+empty_moov',
+                  'pipe:1',
+                ]);
 
-                  this.filename = filename;
-                }
-                break;
+                this.ffmpegSpawn.stdio[1].on('data', data => {
+                  console.log({
+                    data,
+                  });
+                });
 
-              case 'first':
-                const { firstKeyframeBuffer } = this.mp4frag;
+                this.ffmpegSpawn.stdio[0].write(payload);
+              } else {
+                this.send([null, { payload, filename }]);
+              }
 
-                if (Buffer.isBuffer(firstKeyframeBuffer)) {
-                  this.send([null, { payload: firstKeyframeBuffer, filename }]);
+              this.writing = true; // must be after send or spawn (value used in onSegment)
 
-                  this.writing = true;
-
-                  this.filename = filename;
-                }
-                break;
-
-              default:
-                if (Number.isInteger(keyframe)) {
-                  /*
-                    todo
-                    need to build indexing into mp4frag
-                    positive int will be from first
-                    negative int will be from last
-                  */
-                }
+              this.filename = filename; // must be after send or spawn (value used in onSegment)
             }
           }
         }
