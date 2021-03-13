@@ -518,56 +518,55 @@ module.exports = RED => {
     }
 
     onInput(msg) {
-      const { payload, topic } = msg;
+      const { payload, write } = msg;
 
       if (Buffer.isBuffer(payload)) {
         return this.mp4frag.write(payload);
       }
 
-      if (typeof topic === 'string') {
+      if (typeof write === 'object') {
         this.writing = false;
 
         this.filename = undefined;
 
-        switch (topic) {
-          case 'start':
-            {
+        const { command = 'stop', keyframe = 'last', filename = `${Date.now()}.mp4` } = write;
+
+        if (command === 'start') {
+          switch (keyframe) {
+            case 'last':
               const { lastKeyframeBuffer } = this.mp4frag;
 
               if (Buffer.isBuffer(lastKeyframeBuffer)) {
-                const filename = `${Date.now()}.mp4`;
-
                 this.send([null, { payload: lastKeyframeBuffer, filename }]);
 
                 this.writing = true; // must be after send
 
                 this.filename = filename;
               }
-            }
-            break;
-          case 'start_buffered':
-            {
+              break;
+
+            case 'first':
               const { firstKeyframeBuffer } = this.mp4frag;
 
               if (Buffer.isBuffer(firstKeyframeBuffer)) {
-                const filename = `${Date.now()}.mp4`;
-
                 this.send([null, { payload: firstKeyframeBuffer, filename }]);
 
                 this.writing = true;
 
                 this.filename = filename;
               }
-            }
-            break;
-          case 'stop':
-          default:
-            {
-              this.writing = false;
+              break;
 
-              this.filename = undefined;
-            }
-            break;
+            default:
+              if (Number.isInteger(keyframe)) {
+                /*
+                  todo
+                  need to build indexing into mp4frag
+                  positive int will be from first
+                  negative int will be from last
+                */
+              }
+          }
         }
         return;
       }
