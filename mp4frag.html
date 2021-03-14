@@ -39,6 +39,7 @@
       },
       ffmpegRemaster: {
         value: true,
+        required: true,
         validate: function (ffmpegRemaster) {
           return typeof ffmpegRemaster === 'boolean';
         },
@@ -151,7 +152,20 @@
         })
         .appendTo($('div.red-ui-tray-footer'));
     },
-    oneditsave: function () {},
+    oneditsave: function () {
+      const valToBool = (val, def) => {
+        if (typeof val === 'boolean') {
+          return val;
+        }
+        if (typeof val === 'string') {
+          return val === 'true';
+        }
+        return def;
+      };
+
+      this.ffmpegRemaster = valToBool($('#node-input-ffmpegRemaster-container').typedInput('value'), this._def.defaults.ffmpegRemaster.value);
+
+    },
   });
 </script>
 
