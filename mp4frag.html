@@ -135,14 +135,14 @@
       }
       // migration code end
       $('#mp4fragSizeLimit')
-        .val(RED.settings.mp4fragSizeLimit)
+        .val(`${RED.settings.mp4fragSizeLimit} bytes`)
         .prop('readonly', true)
         .on('click', () => {
           RED.notify(this._('mp4frag.warning.size_limit'), { type: 'warning', id: 'mp4frag' });
           // type/color: error = red, warning = orange, success = green, '' = blue
         });
       $('#mp4fragTimeLimit')
-        .val(RED.settings.mp4fragTimeLimit)
+        .val(`${RED.settings.mp4fragTimeLimit} milliseconds`)
         .prop('readonly', true)
         .on('click', () => {
           RED.notify(this._('mp4frag.warning.time_limit'), { type: 'warning', id: 'mp4frag' });
