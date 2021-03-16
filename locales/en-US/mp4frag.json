@@ -14,7 +14,8 @@
     "success": {},
     "warning": {
       "unknown_payload": "unknown payload \"__payload__\"",
-      "ffmpeg_path": "Add property <strong>mp4frag.ffmpegPath</strong> to <em>settings.js</em><hr/><code class=\"form-tips\">mp4frag: { ffmpegPath: '/path/to/ffmpeg' }</code>"
+      "size_limit": "Add property <strong>mp4frag.sizeLimit</strong> to <em>settings.js</em><hr/><code class=\"form-tips\">mp4frag: { sizeLimit: 32000000 }</code>",
+      "time_limit": "Add property <strong>mp4frag.timeLimit</strong> to <em>settings.js</em><hr/><code class=\"form-tips\">mp4frag: { timeLimit: 30000 }</code>"
     },
     "error": {
       "base_path_invalid": "basePath \"__basePath__\" is invalid",

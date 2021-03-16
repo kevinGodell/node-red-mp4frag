@@ -18,6 +18,11 @@
       name: {
         value: '',
       },
+      migrate: {
+        // migration versioning
+        // flag for adding new defaults
+        value: 0.000000001,
+      },
       hlsPlaylistSize: {
         value: MP4FRAG.hlsPlaylistSizeDef,
         required: true,
@@ -37,32 +42,41 @@
         required: true,
         validate: RED.validators.regex(/^[a-z0-9_.]{1,50}$/i),
       },
-      ffmpegRemaster: {
+      processVideo: {
         value: true,
-        required: true,
-        validate: function (ffmpegRemaster) {
-          return typeof ffmpegRemaster === 'boolean';
+      },
+      commandPath: {
+        value: 'ffmpeg',
+        validate: function (commandPath) {
+          const checked = $('#node-input-processVideo').prop('checked');
+          const required = typeof checked === 'boolean' ? checked : this.processVideo === true;
+          return !required || /ffmpeg/i.test(commandPath);
         },
       },
-      ffmpegGlobal: {
-        value: '-loglevel quiet',
-        required: false,
-        validate: function (ffmpegGlobal) {
-          return typeof ffmpegGlobal === 'string';
-        },
-      },
-      ffmpegInput: {
-        value: '-f mp4',
-        required: false,
-        validate: function (ffmpegInput) {
-          return typeof ffmpegInput === 'string';
-        },
-      },
-      ffmpegOutput: {
-        value: '-f mp4 -c copy -movflags +faststart+empty_moov',
-        required: false,
-        validate: function (ffmpegOutput) {
-          return typeof ffmpegOutput === 'string';
+      commandArgs: {
+        value: JSON.stringify([
+          '-loglevel',
+          'quiet',
+          '-f',
+          'mp4',
+          '-i',
+          'pipe:0',
+          '-f',
+          'mp4',
+          '-c',
+          'copy',
+          '-movflags',
+          '+faststart+empty_moov',
+          'pipe:1',
+        ]),
+        validate: function (commandArgs) {
+          try {
+            const checked = $('#node-input-processVideo').prop('checked');
+            const required = typeof checked === 'boolean' ? checked : this.processVideo === true;
+            return !required || Array.isArray(JSON.parse(commandArgs));
+          } catch (e) {
+            return false;
+          }
         },
       },
     },
@@ -73,45 +87,23 @@
       if (this.name) {
         return this.name;
       }
-
       if (this.valid || (Array.isArray(this.validationErrors) && this.validationErrors.includes('basePath') === false)) {
         return `/mp4frag/${this.basePath}`;
       }
-
       return this.type;
     },
     outputLabels: ['playlist', 'buffer'],
     outputs: 2,
     oneditprepare: function () {
-      // migration code start
-
-      if (typeof this.ffmpegRemaster === 'undefined') {
-        this.ffmpegRemaster = this._def.defaults.ffmpegRemaster.value;
-      }
-
-      if (typeof this.ffmpegGlobal === 'undefined') {
-        $('#node-input-ffmpegGlobal').val(this._def.defaults.ffmpegGlobal.value);
-      }
-
-      if (typeof this.ffmpegInput === 'undefined') {
-        $('#node-input-ffmpegInput').val(this._def.defaults.ffmpegInput.value);
-      }
-
-      if (typeof this.ffmpegOutput === 'undefined') {
-        $('#node-input-ffmpegOutput').val(this._def.defaults.ffmpegOutput.value);
-      }
-
-      // migration code end
-
-      $('#mp4fragFfmpegPath')
-        .val(RED.settings.mp4fragFfmpegPath)
-        .prop('readonly', true)
-        .on('click', () => {
-          RED.notify(this._('mp4frag.warning.ffmpeg_path'), { type: 'warning', id: 'mp4frag' });
-          // type/color: error = red, warning = orange, success = green, '' = blue
+      const basePath = $('#node-input-basePath')
+        .prop('placeholder', this.id)
+        .on('input', function () {
+          const newVal = this.value.replace(/[^a-z0-9_.]/gi, '');
+          if (this.value !== newVal) {
+            this.value = newVal;
+          }
         });
-
-      $('#node-input-hlsPlaylistSize').typedInput({
+      const hlsPlaylistSize = $('#node-input-hlsPlaylistSize').typedInput({
         types: [
           {
             value: 'num',
@@ -121,8 +113,7 @@
           },
         ],
       });
-
-      $('#node-input-hlsPlaylistExtra').typedInput({
+      const hlsPlaylistExtra = $('#node-input-hlsPlaylistExtra').typedInput({
         types: [
           {
             value: 'num',
@@ -132,40 +123,38 @@
           },
         ],
       });
-
-      $('#node-input-basePath')
-        .prop('placeholder', this.id)
-        .on('input', function () {
-          const newVal = this.value.replace(/[^a-z0-9_.]/gi, '');
-          if (this.value !== newVal) {
-            this.value = newVal;
-          }
+      const processVideo = $('#node-input-processVideo');
+      const commandPath = $('#node-input-commandPath').prop('placeholder', 'ffmpeg');
+      const commandArgs = $('#node-input-commandArgs').typedInput({ types: ['json'] });
+      // migration code start
+      if (typeof this.migrate === 'undefined' || this.migrate < this._def.defaults.migrate.value) {
+        this.migrate = this._def.defaults.migrate.value;
+        processVideo.prop('checked', this._def.defaults.processVideo.value);
+        commandPath.val(this._def.defaults.commandPath.value);
+        commandArgs.typedInput('value', this._def.defaults.commandArgs.value);
+      }
+      // migration code end
+      $('#mp4fragSizeLimit')
+        .val(RED.settings.mp4fragSizeLimit)
+        .prop('readonly', true)
+        .on('click', () => {
+          RED.notify(this._('mp4frag.warning.size_limit'), { type: 'warning', id: 'mp4frag' });
+          // type/color: error = red, warning = orange, success = green, '' = blue
         });
-
-      $('#node-input-ffmpegRemaster-container')
-        .typedInput({ types: ['bool'] })
-        .typedInput('value', this.ffmpegRemaster);
-
+      $('#mp4fragTimeLimit')
+        .val(RED.settings.mp4fragTimeLimit)
+        .prop('readonly', true)
+        .on('click', () => {
+          RED.notify(this._('mp4frag.warning.time_limit'), { type: 'warning', id: 'mp4frag' });
+          // type/color: error = red, warning = orange, success = green, '' = blue
+        });
       $('<button type="button" class="red-ui-button red-ui-button-small"><i class="fa fa-book"></i> help</button>')
         .on('click', () => {
           RED.sidebar.help.show('mp4frag');
         })
         .appendTo($('div.red-ui-tray-footer'));
     },
-    oneditsave: function () {
-      const valToBool = (val, def) => {
-        if (typeof val === 'boolean') {
-          return val;
-        }
-        if (typeof val === 'string') {
-          return val === 'true';
-        }
-        return def;
-      };
-
-      this.ffmpegRemaster = valToBool($('#node-input-ffmpegRemaster-container').typedInput('value'), this._def.defaults.ffmpegRemaster.value);
-
-    },
+    oneditsave: function () {},
   });
 </script>
 
@@ -174,51 +163,53 @@
     <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
     <input type="text" id="node-input-name" placeholder="Name" />
   </div>
-
   <fieldset>
-    <legend>HLS Playlist Options</legend>
-
-    <div class="form-row">
-      <label for="node-input-hlsPlaylistSize"><i class="fa fa-list-ol"></i> Size</label>
-      <input id="node-input-hlsPlaylistSize" />
-    </div>
-
-    <div class="form-row">
-      <label for="node-input-hlsPlaylistExtra"><i class="fa fa-list-ol"></i> Extra</label>
-      <input id="node-input-hlsPlaylistExtra" />
-    </div>
-
+    <legend>External Api</legend>
+    <p class="form-tips">Used for http routes and socket.io connections.</p>
     <div class="form-row">
       <label for="node-input-basePath"><i class="fa fa-globe"></i> URL</label>
       <code> /mp4frag/<input style="width:auto;text-align:center;" type="text" id="node-input-basePath" />/{resource} </code>
     </div>
   </fieldset>
-
   <fieldset>
-    <legend>FFmpeg Options</legend>
+    <legend>HLS Playlist</legend>
+    <p class="form-tips">Size + Extra = total number of fragments held in memory.</p>
     <div class="form-row">
-      <label for="node-input-ffmpegRemaster-container"><i class="fa fa-play"></i> Remaster</label>
-      <input type="text" id="node-input-ffmpegRemaster-container" />
+      <label for="node-input-hlsPlaylistSize"><i class="fa fa-list-ol"></i> Size</label>
+      <input id="node-input-hlsPlaylistSize" />
     </div>
-
     <div class="form-row">
-      <label for="mp4fragFfmpegPath"><i class="fa fa-picture-o"></i> Path</label>
-      <input type="text" id="mp4fragFfmpegPath" />
+      <label for="node-input-hlsPlaylistExtra"><i class="fa fa-list-ol"></i> Extra</label>
+      <input id="node-input-hlsPlaylistExtra" />
     </div>
-
+  </fieldset>
+  <fieldset>
+    <legend>Video Processing</legend>
+    <p class="form-tips">Process fragmented mp4 video before sending to 2nd output.</p>
     <div class="form-row">
-      <label for="node-input-ffmpegGlobal"><i class="fa fa-picture-o"></i> Global</label>
-      <input type="text" id="node-input-ffmpegGlobal" />
+      <label for="node-input-processVideo"><i class="fa fa-file-video-o"></i> Process</label>
+      <input type="checkbox" id="node-input-processVideo" style="width:auto; vertical-align:top;" />
+      <label for="node-input-processVideo" style="width:auto;"> Process video with the following command:</label>
     </div>
-
     <div class="form-row">
-      <label for="node-input-ffmpegInput"><i class="fa fa-picture-o"></i> Input</label>
-      <input type="text" id="node-input-ffmpegInput" />
+      <label for="node-input-commandPath"><i class="fa fa-terminal"></i> Path</label>
+      <input type="text" id="node-input-commandPath" />
     </div>
-
     <div class="form-row">
-      <label for="node-input-ffmpegOutput"><i class="fa fa-picture-o"></i> Output</label>
-      <input type="text" id="node-input-ffmpegOutput" />
+      <label for="node-input-commandArgs"><i class="fa fa-gears"></i> Args</label>
+      <input id="node-input-commandArgs" />
+    </div>
+  </fieldset>
+  <fieldset>
+    <legend>Video Output</legend>
+    <p class="form-tips">Video output will stop when time or size limit is met.</p>
+    <div class="form-row">
+      <label for="mp4fragSizeLimit"><i class="fa fa-gears"></i> Size Limit</label>
+      <input type="text" id="mp4fragSizeLimit" />
+    </div>
+    <div class="form-row">
+      <label for="mp4fragTimeLimit"><i class="fa fa-gears"></i> Time Limit</label>
+      <input type="text" id="mp4fragTimeLimit" />
     </div>
   </fieldset>
 </script>

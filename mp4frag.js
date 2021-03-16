@@ -31,7 +31,7 @@ module.exports = RED => {
   const { server, settings, _ } = RED;
 
   const {
-    mp4frag: { ffmpegPath = 'ffmpeg', httpMiddleware = null, ioMiddleware = null },
+    mp4frag: { httpMiddleware = null, ioMiddleware = null, sizeLimit = 32000000, timeLimit = 30000 },
   } = settings;
 
   const { createNode, registerType } = RED.nodes;
@@ -46,13 +46,17 @@ module.exports = RED => {
 
       this.hlsPlaylistExtra = config.hlsPlaylistExtra;
 
-      this.ffmpegRemaster = config.ffmpegRemaster;
+      this.processVideo = config.processVideo === true;
 
-      this.ffmpegGlobal = config.ffmpegGlobal;
+      this.commandPath = Mp4fragNode.validateCommandPath(config.commandPath);
 
-      this.ffmpegInput = config.ffmpegInput;
+      this.commandArgs = Mp4fragNode.validateCommandArgs(config.commandArgs);
 
-      this.ffmpegOutput = config.ffmpegOutput;
+      /* console.log({
+        processVideo: this.processVideo,
+        commandPath: this.commandPath,
+        commandArgs: this.commandArgs
+      })*/
 
       try {
         this.createPaths(); // throws
@@ -513,10 +517,6 @@ module.exports = RED => {
       }*/
     }
 
-    spawnFfmpeg() {}
-
-    destroyFfmpeg() {}
-
     destroy() {
       this.removeListener('input', this.onInput);
 
@@ -530,8 +530,6 @@ module.exports = RED => {
 
       this.destroyPaths();
 
-      this.destroyFfmpeg();
-
       this.payload = '';
 
       this.send({ /* topic: 'set_source', */ payload: this.payload });
@@ -544,45 +542,50 @@ module.exports = RED => {
         return this.mp4frag.write(payload);
       }
 
-      if (typeof action === 'object') {
+      /* if (typeof action === 'object') {
         const { subject } = action;
 
         if (subject === 'write') {
-          this.writing = false;
-
-          this.filename = undefined;
 
           if (this.ffmpegSpawn) {
             console.log(typeof this.ffmpegSpawn);
 
-            this.ffmpegSpawn.kill();
+            //console.log(this.ffmpegSpawn.kill());
+
+            this.ffmpegSpawn.stdin.end();
+
+            console.log(this.ffmpegSpawn.killed);
 
             this.ffmpegSpawn = undefined;
           }
 
+          this.writing = false;
+
+          this.filename = undefined;
+
           const { command = 'stop', keyframe = 'last', filename = `${Date.now()}.mp4` } = action;
 
           if (command === 'start') {
-            let payload;
+            let buffer;
 
             if (keyframe === 'last') {
-              payload = this.mp4frag.lastKeyframeBuffer;
+              buffer = this.mp4frag.lastKeyframeBuffer;
             } else if (keyframe === 'first') {
-              payload = this.mp4frag.firstKeyframeBuffer;
+              buffer = this.mp4frag.firstKeyframeBuffer;
             } else if (Number.isInteger(keyframe)) {
               // payload = this.mp4frag.getKeyframeBuffer(keyframe);
-              /*
+              /!*
                 todo
                 need to build indexing into mp4frag
                 positive int will be from first
                 negative int will be from last
-              */
+              *!/
             } else {
               console.log('invalid selection');
               return;
             }
 
-            if (Buffer.isBuffer(payload)) {
+            if (Buffer.isBuffer(buffer)) {
               if (this.ffmpegRemaster === true) {
                 this.ffmpegSpawn = spawn(ffmpegPath, [
                   '-loglevel',
@@ -591,24 +594,37 @@ module.exports = RED => {
                   'mp4',
                   '-i',
                   'pipe:0',
+                  //'-reset_timestamps', '1',
                   '-f',
                   'mp4',
+                  //'-an',
+                  //'-c:v',
                   '-c',
                   'copy',
                   '-movflags',
                   '+faststart+empty_moov',
+                  //'+faststart',
+                  //'+frag_keyframe+empty_moov',
                   'pipe:1',
-                ]);
+                ], { stdio: ['pipe', 'pipe', 'inherit']});
 
                 this.ffmpegSpawn.stdio[1].on('data', data => {
                   console.log({
-                    data,
+                    payload: data,
+                    filename
                   });
+
+                  this.send([null, { payload: data, filename }]);
                 });
 
-                this.ffmpegSpawn.stdio[0].write(payload);
+                console.log('push payload into spawn with length', buffer.length);
+
+
+                this.ffmpegSpawn.stdio[0].write(buffer);
+
+                //this.ffmpegSpawn.stdio[0].end();
               } else {
-                this.send([null, { payload, filename }]);
+                this.send([null, { payload: buffer, filename }]);
               }
 
               this.writing = true; // must be after send or spawn (value used in onSegment)
@@ -618,7 +634,7 @@ module.exports = RED => {
           }
         }
         return;
-      }
+      }*/
 
       const { code, signal } = payload;
 
@@ -697,14 +713,14 @@ module.exports = RED => {
         });
       }
 
-      if (this.writing === true && typeof this.filename === 'string') {
+      /* if (this.writing === true && typeof this.filename === 'string') {
         // todo write to spawned ffmpeg or send raw buffer to next node
-        /* if (typeof this.ffmpegSpawn === 'object') {
+        /!* if (typeof this.ffmpegSpawn === 'object') {
 
-        }*/
+        }*!/
 
         this.send([null, { payload: segment, filename: this.filename }]);
-      }
+      }*/
 
       this.status({ fill: 'green', shape: 'dot', text: _('mp4frag.info.segment', { sequence, duration }) });
     }
@@ -726,6 +742,22 @@ module.exports = RED => {
 
       this.status({ fill: 'red', shape: 'dot', text: err.toString() });
     }
+
+    static validateCommandPath(commandPath) {
+      return /ffmpeg/i.test(commandPath) ? commandPath : 'ffmpeg';
+    }
+
+    static validateCommandArgs(commandArgs) {
+      try {
+        const array = JSON.parse(commandArgs);
+        if (Array.isArray(array) && array.length > 0) {
+          return array;
+        }
+      } catch (e) {
+        // do nothing, maybe log
+      }
+      return ['-loglevel', 'quiet', '-f', 'mp4', '-i', 'pipe:0', '-f', 'mp4', '-c', 'copy', '-movflags', '+faststart+empty_moov', 'pipe:1'];
+    }
   }
 
   Mp4fragNode.basePathRegex = /^[a-z0-9_.]{1,50}$/i;
@@ -740,14 +772,22 @@ module.exports = RED => {
 
   Mp4fragNode.httpMiddleware = undefined;
 
-  Mp4fragNode.type = 'mp4frag';
-
   Mp4fragNode.router = undefined;
+
+  Mp4fragNode.sizeLimit = Number.isInteger(sizeLimit) && sizeLimit > 0 ? sizeLimit : 32000000; // 32 mb
+
+  Mp4fragNode.timeLimit = Number.isInteger(timeLimit) && timeLimit > 0 ? timeLimit : 30000; // 30 seconds
+
+  Mp4fragNode.type = 'mp4frag';
 
   const Mp4fragMeta = {
     settings: {
-      mp4fragFfmpegPath: {
-        value: ffmpegPath,
+      mp4fragSizeLimit: {
+        value: Mp4fragNode.sizeLimit,
+        exportable: true,
+      },
+      mp4fragTimeLimit: {
+        value: Mp4fragNode.timeLimit,
         exportable: true,
       },
     },
