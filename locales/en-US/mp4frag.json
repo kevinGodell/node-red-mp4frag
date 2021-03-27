@@ -2,20 +2,22 @@
   "mp4frag": {
     "label": {
       "hls_playlist_size": "HLS Playlist Size",
-      "hls_playlist_extra": "HLS Playlist Extra"
+      "hls_playlist_extra": "HLS Playlist Extra",
+      "bytes": "bytes",
+      "milliseconds": "milliseconds"
     },
     "info": {
       "ready": "ready",
       "removed": "removed",
       "closed": "closed",
       "reset": "reset",
-      "segment": "sequence: __sequence__, duration: __duration__"
+      "segment": "s: __sequence__, d: __duration__, k: __keyframe__"
     },
     "success": {},
     "warning": {
       "unknown_payload": "unknown payload \"__payload__\"",
-      "size_limit": "Add property <strong>mp4frag.sizeLimit</strong> to <em>settings.js</em><hr/><code class=\"form-tips\">mp4frag: { sizeLimit: 32000000 }</code>",
-      "time_limit": "Add property <strong>mp4frag.timeLimit</strong> to <em>settings.js</em><hr/><code class=\"form-tips\">mp4frag: { timeLimit: 30000 }</code>"
+      "size_limit": "Add property <strong>mp4frag.sizeLimit</strong> to <em>settings.js</em><hr/><code class=\"form-tips\">mp4frag: { sizeLimit: 10000000 }</code>",
+      "time_limit": "Add property <strong>mp4frag.timeLimit</strong> to <em>settings.js</em><hr/><code class=\"form-tips\">mp4frag: { timeLimit: 10000 }</code>"
     },
     "error": {
       "base_path_invalid": "basePath \"__basePath__\" is invalid",

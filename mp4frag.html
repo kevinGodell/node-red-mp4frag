@@ -107,7 +107,6 @@
         types: [
           {
             value: 'num',
-            label: this._('mp4frag.label.hls_list_size'),
             icon: 'fa fa-list-ol',
             options: ['2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20'],
           },
@@ -117,7 +116,6 @@
         types: [
           {
             value: 'num',
-            label: this._('mp4frag.label.hls_list_extra'),
             icon: 'fa fa-list-ol',
             options: ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'],
           },
@@ -135,14 +133,14 @@
       }
       // migration code end
       $('#mp4fragSizeLimit')
-        .val(`${RED.settings.mp4fragSizeLimit} bytes`)
+        .val(`${RED.settings.mp4fragSizeLimit} ${this._('mp4frag.label.bytes')}`)
         .prop('readonly', true)
         .on('click', () => {
           RED.notify(this._('mp4frag.warning.size_limit'), { type: 'warning', id: 'mp4frag' });
           // type/color: error = red, warning = orange, success = green, '' = blue
         });
       $('#mp4fragTimeLimit')
-        .val(`${RED.settings.mp4fragTimeLimit} milliseconds`)
+        .val(`${RED.settings.mp4fragTimeLimit} ${this._('mp4frag.label.milliseconds')}`)
         .prop('readonly', true)
         .on('click', () => {
           RED.notify(this._('mp4frag.warning.time_limit'), { type: 'warning', id: 'mp4frag' });
@@ -150,7 +148,7 @@
         });
       $('<button type="button" class="red-ui-button red-ui-button-small"><i class="fa fa-book"></i> help</button>')
         .on('click', () => {
-          RED.sidebar.help.show('mp4frag');
+          RED.sidebar.help.show(this.type);
         })
         .appendTo($('div.red-ui-tray-footer'));
     },
@@ -165,10 +163,12 @@
   </div>
   <fieldset>
     <legend>External Api</legend>
-    <p class="form-tips">Used for http routes and socket.io connections.</p>
+    <p class="form-tips">Unique value used for http routes and socket.io connections.</p>
     <div class="form-row">
       <label for="node-input-basePath"><i class="fa fa-globe"></i> URL</label>
-      <code> /mp4frag/<input style="width:auto;text-align:center;" type="text" id="node-input-basePath" />/{resource} </code>
+      <label for="node-input-basePath" style="width:auto;"><code>/mp4frag/</code></label>
+      <input style="width:auto; max-width: 120px; text-align:center;" type="text" id="node-input-basePath" />
+      <label for="node-input-basePath" style="width:auto;"><code>/{resource}</code></label>
     </div>
   </fieldset>
   <fieldset>
@@ -185,7 +185,7 @@
   </fieldset>
   <fieldset>
     <legend>Video Processing</legend>
-    <p class="form-tips">Process fragmented mp4 video before sending to 2nd output.</p>
+    <p class="form-tips">Process fragmented mp4 video before sending to output buffer.</p>
     <div class="form-row">
       <label for="node-input-processVideo"><i class="fa fa-file-video-o"></i> Process</label>
       <input type="checkbox" id="node-input-processVideo" style="width:auto; vertical-align:top;" />
@@ -202,7 +202,7 @@
   </fieldset>
   <fieldset>
     <legend>Video Output</legend>
-    <p class="form-tips">Video output will stop when time or size limit is met.</p>
+    <p class="form-tips">Video output will stop when time limit or size limit is met.</p>
     <div class="form-row">
       <label for="mp4fragSizeLimit"><i class="fa fa-gears"></i> Size Limit</label>
       <input type="text" id="mp4fragSizeLimit" />
