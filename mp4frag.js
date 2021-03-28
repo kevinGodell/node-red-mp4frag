@@ -31,7 +31,7 @@ module.exports = RED => {
   const { server, settings, _ } = RED;
 
   const {
-    mp4frag: { httpMiddleware = null, ioMiddleware = null, sizeLimit = 10000000, timeLimit = 10000 },
+    mp4frag: { httpMiddleware = null, ioMiddleware = null, sizeLimit = 5000000, timeLimit = 10000 },
   } = settings;
 
   const { createNode, registerType } = RED.nodes;
@@ -234,30 +234,20 @@ module.exports = RED => {
                 this.ioSocketWaitingForSegments.set(socket, false);
               }
             } else {
-              if (data.buffered === true) {
-                const { segmentList, duration, timestamp, sequence } = this.mp4frag;
+              const { duration, timestamp, sequence } = this.mp4frag;
 
-                if (segmentList !== null) {
-                  socket.emit('segment', { segment: segmentList, duration, timestamp, sequence });
+              const startIndex = data.buffered === true ? 0 : -1;
 
-                  if (data.all !== false) {
-                    this.ioSocketWaitingForSegments.set(socket, true);
-                  }
-                } else {
-                  this.ioSocketWaitingForSegments.set(socket, data.all !== false);
+              const buffer = this.mp4frag.getSegmentList(startIndex, true);
+
+              if (Buffer.isBuffer(buffer)) {
+                socket.emit('segment', { segment: buffer, duration, timestamp, sequence });
+
+                if (data.all !== false) {
+                  this.ioSocketWaitingForSegments.set(socket, true);
                 }
               } else {
-                const { segmentObject } = this.mp4frag;
-
-                if (segmentObject.segment !== null) {
-                  socket.emit('segment', segmentObject);
-
-                  if (data.all !== false) {
-                    this.ioSocketWaitingForSegments.set(socket, true);
-                  }
-                } else {
-                  this.ioSocketWaitingForSegments.set(socket, data.all !== false);
-                }
+                this.ioSocketWaitingForSegments.set(socket, data.all !== false);
               }
             }
           });
@@ -424,9 +414,7 @@ module.exports = RED => {
         }
 
         if (params[4]) {
-          console.log(params[4], this.id);
-
-          const { initialization, segment } = this.mp4frag;
+          const { initialization } = this.mp4frag;
 
           if (!initialization) {
             return res.status(404).send(_('mp4frag.error.initialization_not_found', { basePath: this.basePath }));
@@ -436,8 +424,10 @@ module.exports = RED => {
 
           res.write(initialization);
 
-          if (segment) {
-            res.write(segment);
+          const buffer = this.mp4frag.getSegmentList(-1, true);
+
+          if (Buffer.isBuffer(buffer)) {
+            res.write(buffer);
           }
 
           res.flush();
@@ -537,9 +527,13 @@ module.exports = RED => {
         const { subject } = action;
 
         if (subject === 'write') {
-          this.stopWriting();
-
           const startTime = Date.now();
+
+          if (typeof this.cancelTime === 'number' && startTime < this.cancelTime) {
+            return;
+          }
+
+          this.stopWriting();
 
           // keyframe should only be index number, positive from beginning, negative from reverse
           const { command = 'stop', keyframe = -1, filename = `${this.processVideo ? 'p' : 'r'}${startTime}.mp4` } = action;
@@ -559,6 +553,10 @@ module.exports = RED => {
                 Number.isInteger(action.timeLimit) && action.timeLimit > 0
                   ? Math.min(action.timeLimit, Mp4fragNode.timeLimit)
                   : Mp4fragNode.timeLimit;
+
+              const endTime = startTime + timeLimit;
+
+              const cancelTime = startTime + 0.5 * timeLimit;
 
               if (this.processVideo) {
                 const spawned = spawn(this.commandPath, this.commandArgs);
@@ -605,11 +603,13 @@ module.exports = RED => {
                     if (spawned instanceof ChildProcess && spawned.exitCode === null) {
                       spawned.stdin.write(segment);
 
-                      if ((byteLength += segment.byteLength) >= sizeLimit || Date.now() - startTime >= timeLimit) {
+                      if ((byteLength += segment.byteLength) >= sizeLimit || Date.now() >= endTime) {
                         this.stopWriting();
                       }
                     }
                   };
+
+                  this.cancelTime = cancelTime;
 
                   this.writing = true;
                 }
@@ -619,10 +619,12 @@ module.exports = RED => {
                 this.mp4fragWriter = segment => {
                   this.send([null, { payload: segment, filename }]);
 
-                  if ((byteLength += segment.byteLength) >= sizeLimit || Date.now() - startTime >= timeLimit) {
+                  if ((byteLength += segment.byteLength) >= sizeLimit || Date.now() >= endTime) {
                     this.stopWriting();
                   }
                 };
+
+                this.cancelTime = cancelTime;
 
                 this.writing = true;
               }
@@ -747,6 +749,8 @@ module.exports = RED => {
       if (this.writing === true) {
         this.writing = false;
 
+        this.cancelTime = undefined;
+
         this.mp4fragWriter = undefined;
 
         if (this.spawned instanceof ChildProcess) {
@@ -818,7 +822,7 @@ module.exports = RED => {
 
   Mp4fragNode.router = undefined;
 
-  Mp4fragNode.sizeLimit = Number.isInteger(sizeLimit) && sizeLimit > 0 ? sizeLimit : 10000000; // 10 mb
+  Mp4fragNode.sizeLimit = Number.isInteger(sizeLimit) && sizeLimit > 0 ? sizeLimit : 5000000; // 10 mb
 
   Mp4fragNode.timeLimit = Number.isInteger(timeLimit) && timeLimit > 0 ? timeLimit : 10000; // 10 seconds
 
