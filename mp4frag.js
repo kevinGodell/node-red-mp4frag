@@ -527,108 +527,119 @@ module.exports = RED => {
         const { subject } = action;
 
         if (subject === 'write') {
-          const startTime = Date.now();
-
-          if (typeof this.cancelTime === 'number' && startTime < this.cancelTime) {
-            return;
-          }
-
-          this.stopWriting();
-
-          // keyframe should only be index number, positive from beginning, negative from reverse
-          const { command = 'stop', keyframe = -1, filename = `${this.processVideo ? 'p' : 'r'}${startTime}.mp4` } = action;
+          const { command = 'stop' } = action;
 
           if (command === 'start') {
-            const buffer = this.mp4frag.getBuffer(keyframe, true);
+            const startTime = Date.now();
 
-            if (Buffer.isBuffer(buffer)) {
-              let byteLength = 0; // buffer.byteLength; // todo or should init to 0 to not consider pre video buffer size?
+            const sizeLimit =
+              Number.isInteger(action.sizeLimit) && action.sizeLimit > 0
+                ? Math.min(action.sizeLimit, Mp4fragNode.sizeLimit)
+                : Mp4fragNode.sizeLimit;
 
-              const sizeLimit =
-                Number.isInteger(action.sizeLimit) && action.sizeLimit > 0
-                  ? Math.min(action.sizeLimit, Mp4fragNode.sizeLimit)
-                  : Mp4fragNode.sizeLimit;
+            const timeLimit =
+              Number.isInteger(action.timeLimit) && action.timeLimit > 0
+                ? Math.min(action.timeLimit, Mp4fragNode.timeLimit)
+                : Mp4fragNode.timeLimit;
 
-              const timeLimit =
-                Number.isInteger(action.timeLimit) && action.timeLimit > 0
-                  ? Math.min(action.timeLimit, Mp4fragNode.timeLimit)
-                  : Mp4fragNode.timeLimit;
+            const endTime = startTime + timeLimit;
 
-              const endTime = startTime + timeLimit;
+            const byteLength = 0;
 
-              const cancelTime = startTime + 0.5 * timeLimit;
+            if (this.writing) {
+              this.endTime = endTime;
 
-              if (this.processVideo) {
-                const spawned = spawn(this.commandPath, this.commandArgs);
+              this.byteLength = byteLength;
 
-                spawned.once('error', err => {
-                  this.error(err);
+              this.sizeLimit = sizeLimit;
+            } else {
+              const { keyframe = -1, filename = `${this.processVideo ? 'p' : 'r'}${startTime}.mp4` } = action;
 
-                  this.status({ fill: 'red', shape: 'dot', text: err.toString() });
-                });
+              const buffer = this.mp4frag.getBuffer(keyframe, true);
 
-                if (typeof spawned.pid === 'number') {
-                  this.spawned = spawned;
+              if (Buffer.isBuffer(buffer)) {
+                if (this.processVideo) {
+                  const spawned = spawn(this.commandPath, this.commandArgs);
 
-                  spawned.once('close', close => {
-                    spawned.removeAllListeners('error');
+                  spawned.once('error', err => {
+                    this.error(err);
 
-                    spawned.stdin.removeAllListeners('error');
-
-                    spawned.stdout.removeAllListeners('data');
-
-                    spawned.stdout.removeAllListeners('close');
+                    this.status({ fill: 'red', shape: 'dot', text: err.toString() });
                   });
 
-                  spawned.stdout.on('data', data => this.send([null, { payload: data, filename }]));
+                  if (typeof spawned.pid === 'number') {
+                    this.spawned = spawned;
 
-                  // todo stdin will error if pipe:0 not passed in args
-                  spawned.stdin.on('error', err => {
-                    if (spawned.exitCode === null) {
-                      if (this.spawned === spawned) {
-                        this.error(err);
+                    spawned.once('close', close => {
+                      spawned.removeAllListeners('error');
 
-                        this.status({ fill: 'red', shape: 'dot', text: err.toString() });
+                      spawned.stdin.removeAllListeners('error');
 
-                        this.stopWriting();
-                      } else {
-                        spawned.kill();
+                      spawned.stdout.removeAllListeners('data');
+
+                      spawned.stdout.removeAllListeners('close');
+                    });
+
+                    spawned.stdout.on('data', data => this.send([null, { payload: data, filename }]));
+
+                    // todo stdin will error if pipe:0 not passed in args
+                    spawned.stdin.on('error', err => {
+                      if (spawned.exitCode === null) {
+                        if (this.spawned === spawned) {
+                          this.error(err);
+
+                          this.status({ fill: 'red', shape: 'dot', text: err.toString() });
+
+                          this.stopWriting();
+                        } else {
+                          spawned.kill();
+                        }
                       }
-                    }
-                  });
+                    });
 
-                  spawned.stdin.write(buffer);
+                    spawned.stdin.write(buffer);
+
+                    this.byteLength = byteLength;
+
+                    this.sizeLimit = sizeLimit;
+
+                    this.endTime = endTime;
+
+                    this.mp4fragWriter = segment => {
+                      if (spawned instanceof ChildProcess && spawned.exitCode === null) {
+                        spawned.stdin.write(segment);
+
+                        if ((this.byteLength += segment.byteLength) >= this.sizeLimit || Date.now() >= this.endTime) {
+                          this.stopWriting();
+                        }
+                      }
+                    };
+
+                    this.writing = true;
+                  }
+                } else {
+                  this.send([null, { payload: buffer, filename }]);
+
+                  this.byteLength = byteLength;
+
+                  this.sizeLimit = sizeLimit;
+
+                  this.endTime = endTime;
 
                   this.mp4fragWriter = segment => {
-                    if (spawned instanceof ChildProcess && spawned.exitCode === null) {
-                      spawned.stdin.write(segment);
+                    this.send([null, { payload: segment, filename }]);
 
-                      if ((byteLength += segment.byteLength) >= sizeLimit || Date.now() >= endTime) {
-                        this.stopWriting();
-                      }
+                    if ((this.byteLength += segment.byteLength) >= this.sizeLimit || Date.now() >= this.endTime) {
+                      this.stopWriting();
                     }
                   };
 
-                  this.cancelTime = cancelTime;
-
                   this.writing = true;
                 }
-              } else {
-                this.send([null, { payload: buffer, filename }]);
-
-                this.mp4fragWriter = segment => {
-                  this.send([null, { payload: segment, filename }]);
-
-                  if ((byteLength += segment.byteLength) >= sizeLimit || Date.now() >= endTime) {
-                    this.stopWriting();
-                  }
-                };
-
-                this.cancelTime = cancelTime;
-
-                this.writing = true;
               }
             }
+          } else {
+            this.stopWriting();
           }
         }
 
@@ -749,9 +760,13 @@ module.exports = RED => {
       if (this.writing === true) {
         this.writing = false;
 
-        this.cancelTime = undefined;
-
         this.mp4fragWriter = undefined;
+
+        this.byteLength = undefined;
+
+        this.sizeLimit = undefined;
+
+        this.endTime = undefined;
 
         if (this.spawned instanceof ChildProcess) {
           const spawned = this.spawned;
