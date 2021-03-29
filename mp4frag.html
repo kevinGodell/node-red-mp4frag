@@ -250,10 +250,11 @@
       <dl class="message-properties">
         <dt class="optional">subject<span class="property-type">string</span></dt>
         <dd>'write'</dd>
-        <dd>Triggers video output buffer.</dd>
+        <dd>Controls the video output buffer.</dd>
         <dt class="optional">command<span class="property-type">string</span></dt>
         <dd>'start' or 'stop'</dd>
-        <dd>Start or stop video output buffer.</dd>
+        <dd>Start or stop writing video to the output buffer.</dd>
+        <dd>Passing 'start' while already writing will extend it by resetting the sizeLimit and timeLimit.</dd>
         <dt class="optional">keyframe<span class="property-type">number</span></dt>
         <dd>index, e.g. -1 or 0 or 5 or -3</dd>
         <dd>-1 will retrieve newest segment from buffer array.</dd>
@@ -262,12 +263,14 @@
         <dd>Negative integer searches from end of buffer array.</dd>
         <dt class="optional">sizeLimit<span class="property-type">number</span></dt>
         <dd>bytes, e.g. 5000000</dd>
+        <dd>Can be less than or equal to the global value in settings.js</dd>
         <dd>Video output buffer will stop when byte sizeLimit is reached.</dd>
-        <dd>Buffered video will not be factored into size calculation.</dd>
+        <dd>Previously buffered video will not be factored into size calculation.</dd>
         <dt class="optional">timeLimit<span class="property-type">number</span></dt>
         <dd>milliseconds, e.g. 5000</dd>
+        <dd>Can be less than or equal to the global value in settings.js</dd>
         <dd>Video output buffer will stop when milliseconds timeLimit is reached.</dd>
-        <dd>Buffered video will not be factored into time calculation.</dd>
+        <dd>Previously buffered video will not be factored into time calculation.</dd>
         <dt class="optional">filename<span class="property-type">string</span></dt>
         <dd>'/some_dir/some_file_name.mp4'</dd>
         <dd>Filename will be passed with output so that it can be used in the file node.</dd>
@@ -278,7 +281,7 @@
   <h3>Outputs</h3>
   <ol>
     <li>
-      <h4>Playlist Output</h4>
+      <h4>Playlist</h4>
       <p>It will send a <code>msg</code> structured as:</p>
       <pre class="form-tips" style="min-width: 450px"><code>
 {
@@ -295,7 +298,7 @@
       </code></pre>
     </li>
     <li>
-      <h4>Buffer Output</h4>
+      <h4>Buffer</h4>
       <p>When triggered, the buffer output will send processed or raw fragmented mp4 video.</p>
       <p>It will send a <code>msg</code> structured as:</p>
       <pre class="form-tips" style="min-width: 450px"><code>
