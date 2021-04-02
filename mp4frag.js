@@ -10,29 +10,25 @@ const { spawn, ChildProcess } = require('child_process');
 
 const Mp4Frag = require('mp4frag');
 
-Mp4Frag.prototype.toJSON = function () {
-  return {
-    hlsPlaylist: {
-      base: this._hlsPlaylistBase,
-      init: this._hlsPlaylistInit,
-      size: this._hlsPlaylistSize,
-      extra: this._hlsPlaylistExtra,
-    },
-    segmentCount: this._segmentCount,
-    sequence: this._sequence,
-    duration: this._duration,
-    timestamp: this._timestamp,
-    audioCodec: this._audioCodec,
-    videoCodec: this._videoCodec,
-  };
-};
-
 module.exports = RED => {
   const { server, settings, _ } = RED;
 
-  const {
-    mp4frag: { httpMiddleware = null, ioMiddleware = null, sizeLimit = 5000000, timeLimit = 10000 },
-  } = settings;
+  // if not defined or has incorrect data type in settings.js
+  if (typeof settings.mp4frag !== 'object') {
+    settings.mp4frag = {};
+  }
+
+  const { mp4frag } = settings;
+
+  if (!Number.isInteger(mp4frag.sizeLimit) || mp4frag.sizeLimit < 0) {
+    mp4frag.sizeLimit = 5000000;
+  }
+
+  if (!Number.isInteger(mp4frag.timeLimit) || mp4frag.timeLimit < 0) {
+    mp4frag.timeLimit = 10000;
+  }
+
+  const { httpMiddleware = null, ioMiddleware = null, sizeLimit, timeLimit } = mp4frag;
 
   const { createNode, registerType } = RED.nodes;
 
@@ -48,13 +44,17 @@ module.exports = RED => {
 
       this.processVideo = config.processVideo === true;
 
-      this.commandPath = Mp4fragNode.validateCommandPath(config.commandPath);
+      this.commandPath = config.commandPath;
 
-      this.commandArgs = Mp4fragNode.validateCommandArgs(config.commandArgs);
+      this.commandArgs = config.commandArgs;
 
       this.writing = false;
 
       try {
+        if (this.processVideo === true) {
+          this.validateCommand(); // throws
+        }
+
         this.createPaths(); // throws
 
         this.createMp4frag(); // throws
@@ -73,6 +73,20 @@ module.exports = RED => {
 
         this.status({ fill: 'red', shape: 'dot', text: err.toString() });
       }
+    }
+
+    validateCommand() {
+      if (!Mp4fragNode.commandPathRegex.test(this.commandPath)) {
+        throw new Error(_('mp4frag.error.command_path_invalid', { commandPath: this.commandPath }));
+      }
+
+      const array = Mp4fragNode.jsonParse(this.commandArgs);
+
+      if (!Array.isArray(array) || !array.includes('pipe:0') || !array.includes('pipe:1')) {
+        throw new Error(_('mp4frag.error.command_args_invalid', { commandArgs: array.toString() }));
+      }
+
+      this.commandArgs = array;
     }
 
     createPaths() {
@@ -309,18 +323,18 @@ module.exports = RED => {
     }
 
     createHttpRoute() {
-      if (typeof Mp4fragNode.router === 'undefined') {
-        Mp4fragNode.router = Router({ caseSensitive: true });
+      if (typeof Mp4fragNode.httpRouter === 'undefined') {
+        Mp4fragNode.httpRouter = Router({ caseSensitive: true });
 
-        Mp4fragNode.router.mp4fragRouter = true;
+        Mp4fragNode.httpRouter.mp4fragRouter = true;
 
         Mp4fragNode.httpMiddleware = httpMiddleware;
 
         if (Mp4fragNode.httpMiddleware !== null) {
-          Mp4fragNode.router.use(Mp4fragNode.httpMiddleware);
+          Mp4fragNode.httpRouter.use(Mp4fragNode.httpMiddleware);
         }
 
-        Mp4fragNode.router.get('/', (req, res) => {
+        Mp4fragNode.httpRouter.get('/', (req, res) => {
           let basePathArray = Array.from(Mp4fragNode.basePathMap);
 
           res.type('json').send(JSON.stringify(basePathArray, null, 2));
@@ -337,7 +351,7 @@ module.exports = RED => {
           res.type('json').send(JSON.stringify(basePathArray, null, 2));*/
         });
 
-        RED.httpNode.use('/mp4frag', Mp4fragNode.router);
+        RED.httpNode.use('/mp4frag', Mp4fragNode.httpRouter);
       }
 
       this.resWaitingForSegments = new Set();
@@ -450,7 +464,7 @@ module.exports = RED => {
         }
       };
 
-      Mp4fragNode.router.route(this.routePath).get(endpoint);
+      Mp4fragNode.httpRouter.route(this.routePath).get(endpoint);
     }
 
     destroyHttpRoute() {
@@ -466,7 +480,7 @@ module.exports = RED => {
 
       this.resWaitingForSegments = undefined;
 
-      const { stack } = Mp4fragNode.router;
+      const { stack } = Mp4fragNode.httpRouter;
 
       for (let i = stack.length - 1; i >= 0; --i) {
         const layer = stack[i];
@@ -516,6 +530,113 @@ module.exports = RED => {
       this.send({ /* topic: 'set_source', */ payload: this.payload });
     }
 
+    startWriting(config = {}) {
+      if (this.mp4frag.initialization === null) {
+        return;
+      }
+
+      const startTime = Date.now();
+
+      this.endTime =
+        startTime +
+        (Number.isInteger(config.timeLimit) && config.timeLimit > 0
+          ? Math.min(config.timeLimit, Mp4fragNode.timeLimit)
+          : Mp4fragNode.timeLimit);
+
+      this.sizeLimit =
+        Number.isInteger(config.sizeLimit) && config.sizeLimit > 0
+          ? Math.min(config.sizeLimit, Mp4fragNode.sizeLimit)
+          : Mp4fragNode.sizeLimit;
+
+      this.byteLength = 0;
+
+      if (this.writing !== true) {
+        // start a new writing session
+
+        const { keyframe = -1, filename = `${this.processVideo ? 'p' : 'r'}${startTime}.mp4` } = config;
+
+        const buffer = this.mp4frag.getBuffer(keyframe, true);
+
+        if (this.processVideo) {
+          const spawned = spawn(this.commandPath, this.commandArgs);
+
+          spawned.once('error', err => {
+            this.error(err);
+
+            this.status({ fill: 'red', shape: 'dot', text: err.toString() });
+          });
+
+          if (typeof spawned.pid === 'number') {
+            spawned.once('close', close => {
+              if (spawned === this.spawned) {
+                // if spawned === this.spawned, SAFE to call this.stopWriting
+                this.stopWriting();
+              }
+
+              spawned.removeAllListeners('error');
+
+              spawned.stdin.removeAllListeners('error');
+
+              spawned.stdout.removeAllListeners('data');
+
+              spawned.stdout.removeAllListeners('close');
+            });
+
+            spawned.stdout.on('data', data => this.send([null, { payload: data, filename }]));
+
+            spawned.stdin.on('error', err => {
+              // stdin will error if pipe:0 not passed in args
+
+              if (spawned === this.spawned) {
+                // if spawned === this.spawned, SAFE to call this.stopWriting
+
+                this.error(err);
+
+                this.status({ fill: 'red', shape: 'dot', text: err.toString() });
+
+                this.stopWriting();
+              } else {
+                // just kill it
+                spawned.kill();
+              }
+            });
+
+            if (Buffer.isBuffer(buffer)) {
+              spawned.stdin.write(buffer);
+            }
+
+            this.mp4fragWriter = segment => {
+              if (spawned instanceof ChildProcess && spawned.exitCode === null) {
+                spawned.stdin.write(segment);
+
+                if ((this.byteLength += segment.byteLength) >= this.sizeLimit || Date.now() >= this.endTime) {
+                  this.stopWriting();
+                }
+              }
+            };
+
+            this.spawned = spawned;
+
+            this.writing = true;
+          }
+        } else {
+          if (Buffer.isBuffer(buffer)) {
+            this.send([null, { payload: buffer, filename }]);
+          }
+
+          this.mp4fragWriter = segment => {
+            this.send([null, { payload: segment, filename }]);
+
+            if ((this.byteLength += segment.byteLength) >= this.sizeLimit || Date.now() >= this.endTime) {
+              this.stopWriting();
+            }
+          };
+
+          this.writing = true;
+        }
+      }
+    }
+
     onInput(msg) {
       const { payload, action } = msg;
 
@@ -530,118 +651,7 @@ module.exports = RED => {
           const { command = 'stop' } = action;
 
           if (command === 'start') {
-            if (this.mp4frag.initialization === null) {
-              return;
-            }
-
-            const startTime = Date.now();
-
-            const sizeLimit =
-              Number.isInteger(action.sizeLimit) && action.sizeLimit > 0
-                ? Math.min(action.sizeLimit, Mp4fragNode.sizeLimit)
-                : Mp4fragNode.sizeLimit;
-
-            const timeLimit =
-              Number.isInteger(action.timeLimit) && action.timeLimit > 0
-                ? Math.min(action.timeLimit, Mp4fragNode.timeLimit)
-                : Mp4fragNode.timeLimit;
-
-            const endTime = startTime + timeLimit;
-
-            const byteLength = 0;
-
-            if (this.writing) {
-              this.endTime = endTime;
-
-              this.byteLength = byteLength;
-
-              this.sizeLimit = sizeLimit;
-            } else {
-              const { keyframe = -1, filename = `${this.processVideo ? 'p' : 'r'}${startTime}.mp4` } = action;
-
-              if (this.processVideo) {
-                const spawned = spawn(this.commandPath, this.commandArgs);
-
-                spawned.once('error', err => {
-                  this.error(err);
-
-                  this.status({ fill: 'red', shape: 'dot', text: err.toString() });
-                });
-
-                if (typeof spawned.pid === 'number') {
-                  this.spawned = spawned;
-
-                  spawned.once('close', close => {
-                    spawned.removeAllListeners('error');
-
-                    spawned.stdin.removeAllListeners('error');
-
-                    spawned.stdout.removeAllListeners('data');
-
-                    spawned.stdout.removeAllListeners('close');
-                  });
-
-                  spawned.stdout.on('data', data => this.send([null, { payload: data, filename }]));
-
-                  // todo stdin will error if pipe:0 not passed in args
-                  spawned.stdin.on('error', err => {
-                    if (spawned.exitCode === null) {
-                      if (this.spawned === spawned) {
-                        this.error(err);
-
-                        this.status({ fill: 'red', shape: 'dot', text: err.toString() });
-
-                        this.stopWriting();
-                      } else {
-                        spawned.kill();
-                      }
-                    }
-                  });
-
-                  const buffer = this.mp4frag.getBuffer(keyframe, true);
-
-                  if (Buffer.isBuffer(buffer)) {
-                    spawned.stdin.write(buffer);
-                  }
-
-                  this.byteLength = byteLength;
-
-                  this.sizeLimit = sizeLimit;
-
-                  this.endTime = endTime;
-
-                  this.mp4fragWriter = segment => {
-                    if (spawned instanceof ChildProcess && spawned.exitCode === null) {
-                      spawned.stdin.write(segment);
-
-                      if ((this.byteLength += segment.byteLength) >= this.sizeLimit || Date.now() >= this.endTime) {
-                        this.stopWriting();
-                      }
-                    }
-                  };
-
-                  this.writing = true;
-                }
-              } else {
-                this.send([null, { payload: buffer, filename }]);
-
-                this.byteLength = byteLength;
-
-                this.sizeLimit = sizeLimit;
-
-                this.endTime = endTime;
-
-                this.mp4fragWriter = segment => {
-                  this.send([null, { payload: segment, filename }]);
-
-                  if ((this.byteLength += segment.byteLength) >= this.sizeLimit || Date.now() >= this.endTime) {
-                    this.stopWriting();
-                  }
-                };
-
-                this.writing = true;
-              }
-            }
+            this.startWriting(action);
           } else {
             this.stopWriting();
           }
@@ -662,7 +672,9 @@ module.exports = RED => {
 
         this.send({ /* topic: 'set_source', */ payload: this.payload });
 
-        return this.status({ fill: 'green', shape: 'ring', text: _('mp4frag.info.reset') });
+        this.status({ fill: 'green', shape: 'ring', text: _('mp4frag.info.reset') });
+
+        return;
       }
 
       // temporarily log unknown payload as warning for debugging
@@ -790,42 +802,16 @@ module.exports = RED => {
       }
     }
 
-    static validateCommandPath(commandPath) {
-      return Mp4fragNode.commandPathRegex.test(commandPath) ? commandPath : Mp4fragNode.commandPath;
-    }
-
-    static validateCommandArgs(commandArgs) {
+    static jsonParse(str) {
       try {
-        const array = JSON.parse(commandArgs);
-        if (Array.isArray(array) && array.length > 0) {
-          return array;
-        }
+        return JSON.parse(str);
       } catch (e) {
-        // do nothing, maybe log
+        return undefined;
       }
-      return Mp4fragNode.commandArgs;
     }
   }
 
   Mp4fragNode.commandPathRegex = /ffmpeg/i;
-
-  Mp4fragNode.commandPath = 'ffmpeg';
-
-  Mp4fragNode.commandArgs = [
-    '-loglevel',
-    'quiet',
-    '-f',
-    'mp4',
-    '-i',
-    'pipe:0',
-    '-f',
-    'mp4',
-    '-c',
-    'copy',
-    '-movflags',
-    '+faststart+empty_moov',
-    'pipe:1',
-  ];
 
   Mp4fragNode.basePathRegex = /^[a-z0-9_.]{1,50}$/i;
 
@@ -839,22 +825,21 @@ module.exports = RED => {
 
   Mp4fragNode.httpMiddleware = undefined;
 
-  Mp4fragNode.router = undefined;
+  Mp4fragNode.httpRouter = undefined;
 
-  Mp4fragNode.sizeLimit = Number.isInteger(sizeLimit) && sizeLimit > 0 ? sizeLimit : 5000000; // 10 mb
+  Mp4fragNode.sizeLimit = sizeLimit;
 
-  Mp4fragNode.timeLimit = Number.isInteger(timeLimit) && timeLimit > 0 ? timeLimit : 10000; // 10 seconds
+  Mp4fragNode.timeLimit = timeLimit;
 
   Mp4fragNode.type = 'mp4frag';
 
   const Mp4fragSettings = {
     settings: {
-      mp4fragSizeLimit: {
-        value: Mp4fragNode.sizeLimit,
-        exportable: true,
-      },
-      mp4fragTimeLimit: {
-        value: Mp4fragNode.timeLimit,
+      mp4frag: {
+        value: {
+          timeLimit: Mp4fragNode.timeLimit,
+          sizeLimit: Mp4fragNode.sizeLimit,
+        },
         exportable: true,
       },
     },
