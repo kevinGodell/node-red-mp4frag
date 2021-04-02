@@ -67,6 +67,10 @@
           'copy',
           '-movflags',
           '+faststart+empty_moov',
+          '-t',
+          '60',
+          '-fs',
+          '8000000',
           'pipe:1',
         ]),
         validate: function (commandArgs) {
@@ -133,20 +137,20 @@
       }
       // migration code end
       $('#mp4fragSizeLimit')
-        .val(`${RED.settings.mp4fragSizeLimit} ${this._('mp4frag.label.bytes')}`)
+        .val(`${RED.settings.mp4frag.sizeLimit} ${this._('mp4frag.label.bytes')}`)
         .prop('readonly', true)
         .on('click', () => {
-          RED.notify(this._('mp4frag.warning.size_limit', { sizeLimit: RED.settings.mp4fragSizeLimit }), {
+          RED.notify(this._('mp4frag.warning.size_limit', { sizeLimit: RED.settings.mp4frag.sizeLimit }), {
             type: 'warning',
             id: 'mp4frag',
           });
           // type/color: error = red, warning = orange, success = green, '' = blue
         });
       $('#mp4fragTimeLimit')
-        .val(`${RED.settings.mp4fragTimeLimit} ${this._('mp4frag.label.milliseconds')}`)
+        .val(`${RED.settings.mp4frag.timeLimit} ${this._('mp4frag.label.milliseconds')}`)
         .prop('readonly', true)
         .on('click', () => {
-          RED.notify(this._('mp4frag.warning.time_limit', { timeLimit: RED.settings.mp4fragTimeLimit }), {
+          RED.notify(this._('mp4frag.warning.time_limit', { timeLimit: RED.settings.mp4frag.timeLimit }), {
             type: 'warning',
             id: 'mp4frag',
           });
