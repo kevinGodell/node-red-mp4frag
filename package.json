@@ -40,7 +40,8 @@
     "mp4frag.js",
     "mp4frag.html",
     "locales/en-US/mp4frag.json",
-    "flows/flows.json"
+    "flows/flow1.json",
+    "flows/flow2.json"
   ],
   "node-red": {
     "nodes": {
