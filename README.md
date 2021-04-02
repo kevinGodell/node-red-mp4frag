@@ -39,6 +39,15 @@ npm install kevinGodell/node-red-contrib-mp4frag
 
 #### Screenshots
 ![mp4frag flow_1](https://raw.githubusercontent.com/kevinGodell/node-red-contrib-mp4frag/recorder/screenshots/mp4frag_flow_1.png)
+
+---
+
 ![mp4frag flow_2](https://raw.githubusercontent.com/kevinGodell/node-red-contrib-mp4frag/recorder/screenshots/mp4frag_flow_2.png)
+
+---
+
 ![mp4frag flow_3](https://raw.githubusercontent.com/kevinGodell/node-red-contrib-mp4frag/recorder/screenshots/mp4frag_flow_3.png)
+
+---
+
 ![mp4frag settings_1](https://raw.githubusercontent.com/kevinGodell/node-red-contrib-mp4frag/recorder/screenshots/mp4frag_settings_1.png)
