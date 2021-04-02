@@ -16,10 +16,12 @@
     "success": {},
     "warning": {
       "unknown_payload": "unknown payload \"__payload__\"",
-      "size_limit": "Add property <strong>mp4frag.sizeLimit</strong> to <em>settings.js</em><hr/><code class=\"form-tips\">mp4frag: { sizeLimit: 10000000 }</code>",
-      "time_limit": "Add property <strong>mp4frag.timeLimit</strong> to <em>settings.js</em><hr/><code class=\"form-tips\">mp4frag: { timeLimit: 10000 }</code>"
+      "size_limit": "Add property <strong>mp4frag.sizeLimit</strong> to <em>settings.js</em><hr/><code class=\"form-tips\">mp4frag: { sizeLimit: __sizeLimit__ }</code>",
+      "time_limit": "Add property <strong>mp4frag.timeLimit</strong> to <em>settings.js</em><hr/><code class=\"form-tips\">mp4frag: { timeLimit: __timeLimit__ }</code>"
     },
     "error": {
+      "command_path_invalid": "commandPath \"__commandPath__\" is invalid",
+      "command_args_invalid": "commandArgs \"__commandArgs__\" is invalid",
       "base_path_invalid": "basePath \"__basePath__\" is invalid",
       "base_path_duplicate": "basePath \"__basePath__\" is already in use",
       "mp4frag_not_found": "mp4frag not found for \"__basePath__\"",
