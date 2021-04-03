@@ -275,10 +275,14 @@
         <dd>Can be less than or equal to the global value in settings.js</dd>
         <dd>Video output buffer will stop when milliseconds timeLimit is reached.</dd>
         <dd>Previously buffered video will not be factored into time calculation.</dd>
-        <dt class="optional">filename<span class="property-type">string</span></dt>
-        <dd>'/some_dir/some_file_name.mp4'</dd>
-        <dd>Filename will be passed with output so that it can be used in the file node.</dd>
-        <dd>Leave empty for filename based on Date.now() prepended with `r` for raw or `p` for processed.</dd>
+        <dt class="optional">directory<span class="property-type">string</span></dt>
+        <dd>'custom_dir/'</dd>
+        <dd>Directory and name is combined into filename, which is passed with output so that it can be used in the file node.</dd>
+        <dd>Leave empty for directory based on basePath, such as mp4frag/france24/.</dd>
+        <dt class="optional">name<span class="property-type">string</span></dt>
+        <dd>'name.mp4'</dd>
+        <dd>Directory and name is combined into filename, which is passed with output so that it can be used in the file node.</dd>
+        <dd>Leave empty for name based on Date.now() prepended with `r` for raw or `p` for processed, such as p1617405377345.mp4.</dd>
       </dl>
     </li>
   </ul>
