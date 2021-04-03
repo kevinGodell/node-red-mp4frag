@@ -131,8 +131,8 @@
     "processVideo": true,
     "commandPath": "ffmpeg",
     "commandArgs": "[\"-loglevel\",\"quiet\",\"-f\",\"mp4\",\"-i\",\"pipe:0\",\"-f\",\"mp4\",\"-c\",\"copy\",\"-movflags\",\"+faststart+empty_moov\",\"-t\",\"60\",\"-fs\",\"8000000\",\"pipe:1\"]",
-    "x": 730,
-    "y": 120,
+    "x": 720,
+    "y": 100,
     "wires": [
       [],
       [
@@ -147,11 +147,11 @@
     "name": "",
     "filename": "",
     "appendNewline": false,
-    "createDir": false,
+    "createDir": true,
     "overwriteFile": "false",
     "encoding": "none",
-    "x": 810,
-    "y": 260,
+    "x": 770,
+    "y": 200,
     "wires": [
       []
     ]
