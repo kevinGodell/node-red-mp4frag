@@ -553,7 +553,13 @@ module.exports = RED => {
       if (this.writing !== true) {
         // start a new writing session
 
-        const { keyframe = -1, filename = `${this.processVideo ? 'p' : 'r'}${startTime}.mp4` } = config;
+        const {
+          keyframe = -1,
+          directory = `mp4frag/${this.basePath}/`,
+          name = `${this.processVideo ? 'p' : 'r'}${startTime}.mp4`,
+        } = config;
+
+        const filename = directory + name; // could use path.resolve
 
         const buffer = this.mp4frag.getBuffer(keyframe, true);
 
@@ -633,6 +639,36 @@ module.exports = RED => {
           };
 
           this.writing = true;
+        }
+      }
+    }
+
+    stopWriting() {
+      if (this.writing === true) {
+        this.writing = false;
+
+        this.mp4fragWriter = undefined;
+
+        this.byteLength = undefined;
+
+        this.sizeLimit = undefined;
+
+        this.endTime = undefined;
+
+        if (this.spawned instanceof ChildProcess) {
+          const spawned = this.spawned;
+
+          this.spawned = undefined;
+
+          if (spawned.exitCode === null) {
+            setTimeout(() => {
+              if (spawned.exitCode === null) {
+                spawned.kill();
+              }
+            }, 1000);
+
+            spawned.stdin.end();
+          }
         }
       }
     }
@@ -770,36 +806,6 @@ module.exports = RED => {
       this.error(err);
 
       this.status({ fill: 'red', shape: 'dot', text: err.toString() });
-    }
-
-    stopWriting() {
-      if (this.writing === true) {
-        this.writing = false;
-
-        this.mp4fragWriter = undefined;
-
-        this.byteLength = undefined;
-
-        this.sizeLimit = undefined;
-
-        this.endTime = undefined;
-
-        if (this.spawned instanceof ChildProcess) {
-          const spawned = this.spawned;
-
-          this.spawned = undefined;
-
-          if (spawned.exitCode === null) {
-            setTimeout(() => {
-              if (spawned.exitCode === null) {
-                spawned.kill();
-              }
-            }, 1000);
-
-            spawned.stdin.end();
-          }
-        }
-      }
     }
 
     static jsonParse(str) {
