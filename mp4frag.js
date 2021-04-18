@@ -6,8 +6,6 @@ const { Router } = require('express');
 
 const { randomBytes } = require('crypto');
 
-const { spawn, ChildProcess } = require('child_process');
-
 const Mp4Frag = require('mp4frag');
 
 module.exports = RED => {
@@ -42,19 +40,9 @@ module.exports = RED => {
 
       this.hlsPlaylistExtra = config.hlsPlaylistExtra;
 
-      this.processVideo = config.processVideo === true;
-
-      this.commandPath = config.commandPath;
-
-      this.commandArgs = config.commandArgs;
-
       this.writing = false;
 
       try {
-        if (this.processVideo === true) {
-          this.validateCommand(); // throws
-        }
-
         this.createPaths(); // throws
 
         this.createMp4frag(); // throws
@@ -73,20 +61,6 @@ module.exports = RED => {
 
         this.status({ fill: 'red', shape: 'dot', text: err.toString() });
       }
-    }
-
-    validateCommand() {
-      if (!Mp4fragNode.commandPathRegex.test(this.commandPath)) {
-        throw new Error(_('mp4frag.error.command_path_invalid', { commandPath: this.commandPath }));
-      }
-
-      const array = Mp4fragNode.jsonParse(this.commandArgs);
-
-      if (!Array.isArray(array) || !array.includes('pipe:0') || !array.includes('pipe:1')) {
-        throw new Error(_('mp4frag.error.command_args_invalid', { commandArgs: array.toString() }));
-      }
-
-      this.commandArgs = array;
     }
 
     createPaths() {
@@ -551,101 +525,33 @@ module.exports = RED => {
       this.byteLength = 0;
 
       if (this.writing !== true) {
-        // start a new writing session
+        this.send([null, { action: { command: 'start' } }]);
 
-        const {
-          keyframe = -1,
-          directory = `mp4frag/${this.basePath}/`,
-          name = `${this.processVideo ? 'p' : 'r'}${startTime}.mp4`,
-        } = config;
-
-        const filename = directory + name; // could use path.resolve
+        const { keyframe = -1 } = config;
 
         const buffer = this.mp4frag.getBuffer(keyframe, true);
 
-        if (this.processVideo) {
-          const spawned = spawn(this.commandPath, this.commandArgs);
-
-          spawned.once('error', err => {
-            this.error(err);
-
-            this.status({ fill: 'red', shape: 'dot', text: err.toString() });
-          });
-
-          if (typeof spawned.pid === 'number') {
-            spawned.once('close', close => {
-              if (spawned === this.spawned) {
-                // if spawned === this.spawned, SAFE to call this.stopWriting
-                this.stopWriting();
-              }
-
-              spawned.removeAllListeners('error');
-
-              spawned.stdin.removeAllListeners('error');
-
-              spawned.stdout.removeAllListeners('data');
-
-              spawned.stdout.removeAllListeners('close');
-            });
-
-            spawned.stdout.on('data', data => this.send([null, { payload: data, filename }]));
-
-            spawned.stdin.on('error', err => {
-              // stdin will error if pipe:0 not passed in args
-
-              if (spawned === this.spawned) {
-                // if spawned === this.spawned, SAFE to call this.stopWriting
-
-                this.error(err);
-
-                this.status({ fill: 'red', shape: 'dot', text: err.toString() });
-
-                this.stopWriting();
-              } else {
-                // just kill it
-                spawned.kill();
-              }
-            });
-
-            if (Buffer.isBuffer(buffer)) {
-              spawned.stdin.write(buffer);
-            }
-
-            this.mp4fragWriter = segment => {
-              if (spawned instanceof ChildProcess && spawned.exitCode === null) {
-                spawned.stdin.write(segment);
-
-                if ((this.byteLength += segment.byteLength) >= this.sizeLimit || Date.now() >= this.endTime) {
-                  this.stopWriting();
-                }
-              }
-            };
-
-            this.spawned = spawned;
-
-            this.writing = true;
-          }
-        } else {
-          if (Buffer.isBuffer(buffer)) {
-            this.send([null, { payload: buffer, filename }]);
-          }
-
-          this.mp4fragWriter = segment => {
-            this.send([null, { payload: segment, filename }]);
-
-            if ((this.byteLength += segment.byteLength) >= this.sizeLimit || Date.now() >= this.endTime) {
-              this.stopWriting();
-            }
-          };
-
-          this.writing = true;
+        if (Buffer.isBuffer(buffer)) {
+          this.send([null, { payload: buffer }]);
         }
+
+        this.mp4fragWriter = segment => {
+          this.send([null, { payload: segment }]);
+
+          if ((this.byteLength += segment.byteLength) >= this.sizeLimit || Date.now() >= this.endTime) {
+            this.stopWriting();
+          }
+        };
+
+        this.writing = true;
       }
     }
 
     stopWriting() {
       if (this.writing === true) {
         this.writing = false;
+
+        this.send([null, { action: { command: 'stop' } }]);
 
         this.mp4fragWriter = undefined;
 
@@ -654,22 +560,6 @@ module.exports = RED => {
         this.sizeLimit = undefined;
 
         this.endTime = undefined;
-
-        if (this.spawned instanceof ChildProcess) {
-          const spawned = this.spawned;
-
-          this.spawned = undefined;
-
-          if (spawned.exitCode === null) {
-            setTimeout(() => {
-              if (spawned.exitCode === null) {
-                spawned.kill();
-              }
-            }, 1000);
-
-            spawned.stdin.end();
-          }
-        }
       }
     }
 
@@ -712,11 +602,6 @@ module.exports = RED => {
 
         return;
       }
-
-      // temporarily log unknown payload as warning for debugging
-      this.warn(_('mp4frag.warning.unknown_payload', { payload }));
-
-      this.status({ fill: 'yellow', shape: 'dot', text: _('mp4frag.warning.unknown_payload', { payload }) });
     }
 
     onClose(removed, done) {
@@ -816,8 +701,6 @@ module.exports = RED => {
       }
     }
   }
-
-  Mp4fragNode.commandPathRegex = /ffmpeg/i;
 
   Mp4fragNode.basePathRegex = /^[a-z0-9_.]{1,50}$/i;
 

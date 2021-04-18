@@ -42,47 +42,6 @@
         required: true,
         validate: RED.validators.regex(/^[a-z0-9_.]{1,50}$/i),
       },
-      processVideo: {
-        value: true,
-      },
-      commandPath: {
-        value: 'ffmpeg',
-        validate: function (commandPath) {
-          const checked = $('#node-input-processVideo').prop('checked');
-          const required = typeof checked === 'boolean' ? checked : this.processVideo === true;
-          return !required || /ffmpeg/i.test(commandPath);
-        },
-      },
-      commandArgs: {
-        value: JSON.stringify([
-          '-loglevel',
-          'quiet',
-          '-f',
-          'mp4',
-          '-i',
-          'pipe:0',
-          '-f',
-          'mp4',
-          '-c',
-          'copy',
-          '-movflags',
-          '+faststart+empty_moov',
-          '-t',
-          '60',
-          '-fs',
-          '8000000',
-          'pipe:1',
-        ]),
-        validate: function (commandArgs) {
-          try {
-            const checked = $('#node-input-processVideo').prop('checked');
-            const required = typeof checked === 'boolean' ? checked : this.processVideo === true;
-            return !required || Array.isArray(JSON.parse(commandArgs));
-          } catch (e) {
-            return false;
-          }
-        },
-      },
     },
     icon: 'font-awesome/fa-file-video-o',
     inputLabels: 'buffer',
@@ -97,7 +56,7 @@
       return this.type;
     },
     outputLabels: ['playlist', 'buffer'],
-    outputs: 2,
+    outputs: 2, // todo editable
     oneditprepare: function () {
       const basePath = $('#node-input-basePath')
         .prop('placeholder', this.id)
@@ -107,6 +66,7 @@
             this.value = newVal;
           }
         });
+
       const hlsPlaylistSize = $('#node-input-hlsPlaylistSize').typedInput({
         types: [
           {
@@ -116,6 +76,7 @@
           },
         ],
       });
+
       const hlsPlaylistExtra = $('#node-input-hlsPlaylistExtra').typedInput({
         types: [
           {
@@ -125,17 +86,16 @@
           },
         ],
       });
-      const processVideo = $('#node-input-processVideo');
-      const commandPath = $('#node-input-commandPath').prop('placeholder', 'ffmpeg');
-      const commandArgs = $('#node-input-commandArgs').typedInput({ types: ['json'] });
+
       // migration code start
       if (typeof this.migrate === 'undefined' || this.migrate < this._def.defaults.migrate.value) {
         this.migrate = this._def.defaults.migrate.value;
-        processVideo.prop('checked', this._def.defaults.processVideo.value);
-        commandPath.val(this._def.defaults.commandPath.value);
-        commandArgs.typedInput('value', this._def.defaults.commandArgs.value);
+        //processVideo.prop('checked', this._def.defaults.processVideo.value);
+        //commandPath.val(this._def.defaults.commandPath.value);
+        //commandArgs.typedInput('value', this._def.defaults.commandArgs.value);
       }
       // migration code end
+
       $('#mp4fragSizeLimit')
         .val(`${RED.settings.mp4frag.sizeLimit} ${this._('mp4frag.label.bytes')}`)
         .prop('readonly', true)
@@ -146,6 +106,7 @@
           });
           // type/color: error = red, warning = orange, success = green, '' = blue
         });
+
       $('#mp4fragTimeLimit')
         .val(`${RED.settings.mp4frag.timeLimit} ${this._('mp4frag.label.milliseconds')}`)
         .prop('readonly', true)
@@ -156,6 +117,7 @@
           });
           // type/color: error = red, warning = orange, success = green, '' = blue
         });
+
       $('<button type="button" class="red-ui-button red-ui-button-small"><i class="fa fa-book"></i> help</button>')
         .on('click', () => {
           RED.sidebar.help.show(this.type);
@@ -171,6 +133,7 @@
     <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
     <input type="text" id="node-input-name" placeholder="Name" />
   </div>
+
   <fieldset>
     <legend>External Api</legend>
     <p class="form-tips">Unique value used for http routes and socket.io connections.</p>
@@ -181,6 +144,7 @@
       <label for="node-input-basePath" style="width:auto;"><code>/{resource}</code></label>
     </div>
   </fieldset>
+
   <fieldset>
     <legend>HLS Playlist</legend>
     <p class="form-tips">Size + Extra = total number of fragments held in memory.</p>
@@ -193,26 +157,10 @@
       <input id="node-input-hlsPlaylistExtra" />
     </div>
   </fieldset>
+
   <fieldset>
-    <legend>Video Processing</legend>
-    <p class="form-tips">Process fragmented mp4 video before sending to output buffer.</p>
-    <div class="form-row">
-      <label for="node-input-processVideo"><i class="fa fa-file-video-o"></i> Process</label>
-      <input type="checkbox" id="node-input-processVideo" style="width:auto; vertical-align:top;" />
-      <label for="node-input-processVideo" style="width:auto;"> Process video with the following command:</label>
-    </div>
-    <div class="form-row">
-      <label for="node-input-commandPath"><i class="fa fa-terminal"></i> Path</label>
-      <input type="text" id="node-input-commandPath" />
-    </div>
-    <div class="form-row">
-      <label for="node-input-commandArgs"><i class="fa fa-gears"></i> Args</label>
-      <input id="node-input-commandArgs" />
-    </div>
-  </fieldset>
-  <fieldset>
-    <legend>Video Output</legend>
-    <p class="form-tips">Video output will stop when time limit or size limit is met.</p>
+    <legend>Buffer Output</legend>
+    <p class="form-tips">Video buffer output will stop when time limit or size limit is met.</p>
     <div class="form-row">
       <label for="mp4fragSizeLimit"><i class="fa fa-gears"></i> Size Limit</label>
       <input type="text" id="mp4fragSizeLimit" />
@@ -239,7 +187,7 @@
       </code></pre>
     </li>
     <li>
-      <h4>Video Output Trigger</h4>
+      <h4>Buffer Output Trigger</h4>
       <p>Send a <code>msg</code> structured as:</p>
       <pre class="form-tips" style="min-width: 450px"><code>
 {
@@ -249,6 +197,7 @@
     keyframe: -1,
     timeLimit: 5000,
     sizeLimit: 2500000
+  }
 }
       </code></pre>
       <dl class="message-properties">
@@ -275,14 +224,6 @@
         <dd>Can be less than or equal to the global value in settings.js</dd>
         <dd>Video output buffer will stop when milliseconds timeLimit is reached.</dd>
         <dd>Previously buffered video will not be factored into time calculation.</dd>
-        <dt class="optional">directory<span class="property-type">string</span></dt>
-        <dd>'custom_dir/'</dd>
-        <dd>Directory and name is combined into filename, which is passed with output so that it can be used in the file node.</dd>
-        <dd>Leave empty for directory based on basePath, such as mp4frag/france24/.</dd>
-        <dt class="optional">name<span class="property-type">string</span></dt>
-        <dd>'name.mp4'</dd>
-        <dd>Directory and name is combined into filename, which is passed with output so that it can be used in the file node.</dd>
-        <dd>Leave empty for name based on Date.now() prepended with `r` for raw or `p` for processed, such as p1617405377345.mp4.</dd>
       </dl>
     </li>
   </ul>
@@ -307,12 +248,27 @@
     </li>
     <li>
       <h4>Buffer</h4>
-      <p>When triggered, the buffer output will send processed or raw fragmented mp4 video.</p>
-      <p>It will send a <code>msg</code> structured as:</p>
+      <p>When triggered, the buffer output will send fragmented mp4 video.</p>
+      <p>The starting <code>msg</code> is structured as:</p>
       <pre class="form-tips" style="min-width: 450px"><code>
 {
-  payload: &lt;Buffer&gt;,
-  filename: 'p1616949057404.mp4',
+  action: {
+    command: 'start'
+  }
+}
+      </code></pre>
+      <p>The buffer <code>msg</code> is structured as:</p>
+      <pre class="form-tips" style="min-width: 450px"><code>
+{
+  payload: &lt;Buffer&gt;
+}
+      </code></pre>
+      <p>The stopping <code>msg</code> is structured as:</p>
+      <pre class="form-tips" style="min-width: 450px"><code>
+{
+  action: {
+    command: 'stop'
+  }
 }
       </code></pre>
     </li>
@@ -329,13 +285,6 @@
     The number of extra segments to keep in memory beyond the playlist. This can be helpful if the video player falls behind and tries to
     access a segment that is no longer referenced in the playlist.
   </p>
-  <h4>Video Processing</h4>
-  <h5>Process</h5>
-  <p>Determine whether to output raw or processed video.</p>
-  <h5>Path</h5>
-  <p>Path to processing command.</p>
-  <h5>Args</h5>
-  <p>Arguments passed to processing command.</p>
   <h4>Video Output</h4>
   <h5>Size Limit</h5>
   <p>Video output will automatically stop when size limit is reached.</p>
