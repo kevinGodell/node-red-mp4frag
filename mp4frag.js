@@ -505,7 +505,9 @@ module.exports = RED => {
     }
 
     startWriting(config = {}) {
-      if (this.mp4frag.initialization === null) {
+      const { initialization } = this.mp4frag;
+
+      if (initialization === null) {
         return;
       }
 
@@ -533,6 +535,8 @@ module.exports = RED => {
 
         if (Buffer.isBuffer(buffer)) {
           this.send([null, { payload: buffer }]);
+        } else {
+          this.send([null, { payload: initialization }]);
         }
 
         this.mp4fragWriter = segment => {
