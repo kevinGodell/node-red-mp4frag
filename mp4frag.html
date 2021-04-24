@@ -18,6 +18,11 @@
       name: {
         value: '',
       },
+      migrate: {
+        // migration versioning
+        // flag for adding new defaults
+        value: 0.000000001,
+      },
       hlsPlaylistSize: {
         value: MP4FRAG.hlsPlaylistSizeDef,
         required: true,
@@ -45,36 +50,14 @@
       if (this.name) {
         return this.name;
       }
-      if (this.valid === false && this.validationErrors.includes('basePath')) {
-        return `/mp4frag/${this.id}/`;
+      if (this.valid || (Array.isArray(this.validationErrors) && this.validationErrors.includes('basePath') === false)) {
+        return `/mp4frag/${this.basePath}`;
       }
-      return `/mp4frag/${this.basePath}/`;
+      return this.type;
     },
-    outputLabels: 'status',
-    outputs: 1,
+    outputLabels: ['playlist', 'buffer'],
+    outputs: 2, // todo editable
     oneditprepare: function () {
-      $('#node-input-hlsPlaylistSize').typedInput({
-        types: [
-          {
-            value: 'num',
-            label: this._('mp4frag.label.hls_list_size'),
-            icon: 'fa fa-list-ol',
-            options: ['2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20'],
-          },
-        ],
-      });
-
-      $('#node-input-hlsPlaylistExtra').typedInput({
-        types: [
-          {
-            value: 'num',
-            label: this._('mp4frag.label.hls_list_extra'),
-            icon: 'fa fa-list-ol',
-            options: ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'],
-          },
-        ],
-      });
-
       const basePath = $('#node-input-basePath')
         .prop('placeholder', this.id)
         .on('input', function () {
@@ -84,13 +67,60 @@
           }
         });
 
-      if (basePath.val() === '') {
-        basePath.val(this.id);
+      const hlsPlaylistSize = $('#node-input-hlsPlaylistSize').typedInput({
+        types: [
+          {
+            value: 'num',
+            icon: 'fa fa-list-ol',
+            options: ['2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20'],
+          },
+        ],
+      });
+
+      const hlsPlaylistExtra = $('#node-input-hlsPlaylistExtra').typedInput({
+        types: [
+          {
+            value: 'num',
+            icon: 'fa fa-list-ol',
+            options: ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'],
+          },
+        ],
+      });
+
+      // migration code start
+      if (typeof this.migrate === 'undefined' || this.migrate < this._def.defaults.migrate.value) {
+        this.migrate = this._def.defaults.migrate.value;
+        //processVideo.prop('checked', this._def.defaults.processVideo.value);
+        //commandPath.val(this._def.defaults.commandPath.value);
+        //commandArgs.typedInput('value', this._def.defaults.commandArgs.value);
       }
+      // migration code end
+
+      $('#mp4fragSizeLimit')
+        .val(`${RED.settings.mp4frag.sizeLimit} ${this._('mp4frag.label.bytes')}`)
+        .prop('readonly', true)
+        .on('click', () => {
+          RED.notify(this._('mp4frag.warning.size_limit', { sizeLimit: RED.settings.mp4frag.sizeLimit }), {
+            type: 'warning',
+            id: 'mp4frag',
+          });
+          // type/color: error = red, warning = orange, success = green, '' = blue
+        });
+
+      $('#mp4fragTimeLimit')
+        .val(`${RED.settings.mp4frag.timeLimit} ${this._('mp4frag.label.milliseconds')}`)
+        .prop('readonly', true)
+        .on('click', () => {
+          RED.notify(this._('mp4frag.warning.time_limit', { timeLimit: RED.settings.mp4frag.timeLimit }), {
+            type: 'warning',
+            id: 'mp4frag',
+          });
+          // type/color: error = red, warning = orange, success = green, '' = blue
+        });
 
       $('<button type="button" class="red-ui-button red-ui-button-small"><i class="fa fa-book"></i> help</button>')
         .on('click', () => {
-          RED.sidebar.help.show('mp4frag');
+          RED.sidebar.help.show(this.type);
         })
         .appendTo($('div.red-ui-tray-footer'));
     },
@@ -105,40 +135,159 @@
   </div>
 
   <fieldset>
-    <legend>HLS Playlist Options</legend>
+    <legend>External Api</legend>
+    <p class="form-tips">Unique value used for http routes and socket.io connections.</p>
+    <div class="form-row">
+      <label for="node-input-basePath"><i class="fa fa-globe"></i> URL</label>
+      <label for="node-input-basePath" style="width:auto;"><code>/mp4frag/</code></label>
+      <input style="width:auto; max-width: 120px; text-align:center;" type="text" id="node-input-basePath" />
+      <label for="node-input-basePath" style="width:auto;"><code>/{resource}</code></label>
+    </div>
+  </fieldset>
 
+  <fieldset>
+    <legend>HLS Playlist</legend>
+    <p class="form-tips">Size + Extra = total number of fragments held in memory.</p>
     <div class="form-row">
       <label for="node-input-hlsPlaylistSize"><i class="fa fa-list-ol"></i> Size</label>
       <input id="node-input-hlsPlaylistSize" />
     </div>
-
     <div class="form-row">
       <label for="node-input-hlsPlaylistExtra"><i class="fa fa-list-ol"></i> Extra</label>
       <input id="node-input-hlsPlaylistExtra" />
     </div>
+  </fieldset>
 
+  <fieldset>
+    <legend>Buffer Output</legend>
+    <p class="form-tips">Video buffer output will stop when time limit or size limit is met.</p>
     <div class="form-row">
-      <label for="node-input-basePath"><i class="fa fa-globe"></i> URL</label>
-      <code> /mp4frag/<input style="width:auto;text-align:center;" type="text" id="node-input-basePath" />/{resource} </code>
+      <label for="mp4fragSizeLimit"><i class="fa fa-gears"></i> Size Limit</label>
+      <input type="text" id="mp4fragSizeLimit" />
+    </div>
+    <div class="form-row">
+      <label for="mp4fragTimeLimit"><i class="fa fa-gears"></i> Time Limit</label>
+      <input type="text" id="mp4fragTimeLimit" />
     </div>
   </fieldset>
 </script>
 
 <script data-help-name="mp4frag" type="text/html">
-  <h2>Parse a fragmented mp4 from a buffer and serve it as HLS.</h2>
-  <p>After successfully parsing a fragmented mp4 from a buffer, it will send a msg containing the HLS Playlist in the payload.</p>
-  <p><code class="form-tips">{ payload: '/mp4frag/example/hls.m3u8' }</code></p>
-  <p>The HLS Playlist can be consumed by an app such as VLC, a video player library such as HLS.js, or natively in the Safari browser.</p>
-  <h3>HLS Playlist Size</h3>
-  <p>The number of segments to keep referenced inside the playlist.</p>
-  <h3>HLS Playlist Extra</h3>
+  <p>Parse a fragmented mp4 from a buffer and serve it via socket.io, video.mp4, and HLS.</p>
+  <p>The HLS can be consumed by an app such as VLC or ffmpeg, modern browsers using HLS.js, or natively in the Safari browser.</p>
+  <h3>Inputs</h3>
+  <ul>
+    <li>
+      <h4>Mp4 buffer</h4>
+      <p>Send a <code>msg</code> structured as:</p>
+      <pre class="form-tips" style="min-width: 450px"><code>
+{
+  payload: &lt;Buffer&gt;
+}
+      </code></pre>
+    </li>
+    <li>
+      <h4>Buffer Output Trigger</h4>
+      <p>Send a <code>msg</code> structured as:</p>
+      <pre class="form-tips" style="min-width: 450px"><code>
+{
+  action: {
+    subject: 'write',
+    command: 'start',
+    keyframe: -1,
+    timeLimit: 5000,
+    sizeLimit: 2500000
+  }
+}
+      </code></pre>
+      <dl class="message-properties">
+        <dt class="optional">subject<span class="property-type">string</span></dt>
+        <dd>'write'</dd>
+        <dd>Controls the video output buffer.</dd>
+        <dt class="optional">command<span class="property-type">string</span></dt>
+        <dd>'start' or 'stop'</dd>
+        <dd>Start or stop writing video to the output buffer.</dd>
+        <dd>Passing 'start' while already writing will extend it by resetting the sizeLimit and timeLimit.</dd>
+        <dt class="optional">keyframe<span class="property-type">number</span></dt>
+        <dd>index, e.g. -1 or 0 or 5 or -3</dd>
+        <dd>-1 will retrieve newest segment from buffer array.</dd>
+        <dd>0 will retrieve oldest segment from buffer array.</dd>
+        <dd>Positive integer searches from start of buffer array.</dd>
+        <dd>Negative integer searches from end of buffer array.</dd>
+        <dt class="optional">sizeLimit<span class="property-type">number</span></dt>
+        <dd>bytes, e.g. 5000000</dd>
+        <dd>Can be less than or equal to the global value in settings.js</dd>
+        <dd>Video output buffer will stop when byte sizeLimit is reached.</dd>
+        <dd>Previously buffered video will not be factored into size calculation.</dd>
+        <dt class="optional">timeLimit<span class="property-type">number</span></dt>
+        <dd>milliseconds, e.g. 5000</dd>
+        <dd>Can be less than or equal to the global value in settings.js</dd>
+        <dd>Video output buffer will stop when milliseconds timeLimit is reached.</dd>
+        <dd>Previously buffered video will not be factored into time calculation.</dd>
+      </dl>
+    </li>
+  </ul>
+  <h3>Outputs</h3>
+  <ol>
+    <li>
+      <h4>Playlist</h4>
+      <p>It will send a <code>msg</code> structured as:</p>
+      <pre class="form-tips" style="min-width: 450px"><code>
+{
+  payload: {
+    hlsPlaylist: '/mp4frag/front_door_10/hls.m3u8',
+    mp4Video: '/mp4frag/front_door_1/video.mp4',
+    socketIo: {
+      path: '/mp4frag/socket.io',
+      namespace: '/front_door_1',
+      key: '4454022a67ff1abb471c00871ae1ef',
+    }
+  }
+}
+      </code></pre>
+    </li>
+    <li>
+      <h4>Buffer</h4>
+      <p>When triggered, the buffer output will send fragmented mp4 video.</p>
+      <p>The starting <code>msg</code> is structured as:</p>
+      <pre class="form-tips" style="min-width: 450px"><code>
+{
+  action: {
+    command: 'start'
+  }
+}
+      </code></pre>
+      <p>The buffer <code>msg</code> is structured as:</p>
+      <pre class="form-tips" style="min-width: 450px"><code>
+{
+  payload: &lt;Buffer&gt;
+}
+      </code></pre>
+      <p>The stopping <code>msg</code> is structured as:</p>
+      <pre class="form-tips" style="min-width: 450px"><code>
+{
+  action: {
+    command: 'stop'
+  }
+}
+      </code></pre>
+    </li>
+  </ol>
+  <h3>Settings</h3>
+  <h4>External API</h4>
+  <h5>URL</h5>
+  <p>Choose a unique value used for http routes and socket.io connections.</p>
+  <h4>HLS Playlist</h4>
+  <h5>Size</h5>
+  <p>The number of segments to keep referenced inside the m3u8 playlist.</p>
+  <h5>Extra</h5>
   <p>
     The number of extra segments to keep in memory beyond the playlist. This can be helpful if the video player falls behind and tries to
     access a segment that is no longer referenced in the playlist.
   </p>
-  <h3>HLS Playlist URL</h3>
-  <p>
-    Choose a unique path for creating the http route to serve the HLS files. This affects the playlist, initialization fragment, and media
-    segments.
-  </p>
+  <h4>Video Output</h4>
+  <h5>Size Limit</h5>
+  <p>Video output will automatically stop when size limit is reached.</p>
+  <h5>Time Limit</h5>
+  <p>Video output will automatically stop when time limit is reached.</p>
 </script>

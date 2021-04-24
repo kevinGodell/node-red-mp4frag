@@ -6,7 +6,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "pack": "npm pack",
     "pretty": "prettier --write *.html",
-    "lint": "eslint --fix --ext .js --ignore-path .gitignore ."
+    "lint": "eslint --fix --ext .js --ignore-path .gitignore .",
+    "clean": "npm run lint && npm run pretty"
   },
   "repository": {
     "type": "git",
@@ -20,7 +21,8 @@
     "fmp4",
     "parser",
     "ffmpeg",
-    "video"
+    "video",
+    "cctv"
   ],
   "author": "Kevin Godell <kevin.godell@gmail.com> (https://github.com/kevinGodell)",
   "license": "MIT",
@@ -29,7 +31,7 @@
   },
   "homepage": "https://github.com/kevinGodell/node-red-contrib-mp4frag#readme",
   "dependencies": {
-    "mp4frag": "^0.3.0"
+    "mp4frag": "^0.4.0"
   },
   "peerDependencies": {
     "socket.io": "^2.3.0 || ^3.0.3",
@@ -39,7 +41,8 @@
     "mp4frag.js",
     "mp4frag.html",
     "locales/en-US/mp4frag.json",
-    "flows/flows.json"
+    "flows/flow1.json",
+    "flows/flow2.json"
   ],
   "node-red": {
     "nodes": {
@@ -47,13 +50,13 @@
     }
   },
   "devDependencies": {
-    "eslint": "^7.14.0",
-    "eslint-config-prettier": "^6.15.0",
-    "eslint-plugin-prettier": "^3.1.4",
-    "prettier": "^2.2.0"
+    "eslint": "^7.25.0",
+    "eslint-config-prettier": "^8.3.0",
+    "eslint-plugin-prettier": "^3.4.0",
+    "prettier": "^2.2.1"
   },
   "optionalDependencies": {
-    "bufferutil": "^4.0.2",
-    "utf-8-validate": "^5.0.3"
+    "bufferutil": "^4.0.3",
+    "utf-8-validate": "^5.0.4"
   }
 }
