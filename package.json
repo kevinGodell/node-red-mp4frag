@@ -21,7 +21,8 @@
     "fmp4",
     "parser",
     "ffmpeg",
-    "video"
+    "video",
+    "cctv"
   ],
   "author": "Kevin Godell <kevin.godell@gmail.com> (https://github.com/kevinGodell)",
   "license": "MIT",
@@ -30,7 +31,7 @@
   },
   "homepage": "https://github.com/kevinGodell/node-red-contrib-mp4frag#readme",
   "dependencies": {
-    "mp4frag": "github:kevinGodell/mp4frag#keyframe"
+    "mp4frag": "^0.4.0"
   },
   "peerDependencies": {
     "socket.io": "^2.3.0 || ^3.0.3",
@@ -49,13 +50,13 @@
     }
   },
   "devDependencies": {
-    "eslint": "^7.14.0",
-    "eslint-config-prettier": "^6.15.0",
-    "eslint-plugin-prettier": "^3.1.4",
-    "prettier": "^2.2.0"
+    "eslint": "^7.25.0",
+    "eslint-config-prettier": "^8.3.0",
+    "eslint-plugin-prettier": "^3.4.0",
+    "prettier": "^2.2.1"
   },
   "optionalDependencies": {
-    "bufferutil": "^4.0.2",
-    "utf-8-validate": "^5.0.3"
+    "bufferutil": "^4.0.3",
+    "utf-8-validate": "^5.0.4"
   }
 }
