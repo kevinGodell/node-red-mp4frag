@@ -688,14 +688,6 @@ module.exports = RED => {
 
       this.status({ fill: 'red', shape: 'dot', text: err.toString() });
     }
-
-    static jsonParse(str) {
-      try {
-        return JSON.parse(str);
-      } catch (e) {
-        return undefined;
-      }
-    }
   }
 
   Mp4fragNode.basePathRegex = /^[a-z0-9_.]{1,50}$/i;
