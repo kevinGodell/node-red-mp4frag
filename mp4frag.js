@@ -68,7 +68,7 @@ module.exports = RED => {
         throw new Error(_('mp4frag.error.base_path_duplicate', { basePath: this.basePath }));
       }
 
-      Mp4fragNode.basePathMap.set(this.basePath, { id: this.id, running: false }); // todo add status running
+      Mp4fragNode.basePathMap.set(this.basePath, { id: this.id, running: false });
 
       this.hlsPlaylistPath = `/mp4frag/${this.basePath}/hls.m3u8`;
 
