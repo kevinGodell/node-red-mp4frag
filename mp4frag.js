@@ -9,26 +9,20 @@ const { randomBytes } = require('crypto');
 const Mp4Frag = require('mp4frag');
 
 module.exports = RED => {
-  const { server, settings, _ } = RED;
+  const {
+    server,
+    settings,
+    _,
+    nodes: { createNode, registerType },
+  } = RED;
 
-  // if not defined or has incorrect data type in settings.js
-  if (typeof settings.mp4frag !== 'object') {
-    settings.mp4frag = {};
-  }
+  const { mp4frag = {} } = settings;
 
-  const { mp4frag } = settings;
+  const { httpMiddleware = null, ioMiddleware = null } = mp4frag;
 
-  if (!Number.isInteger(mp4frag.sizeLimit) || mp4frag.sizeLimit < 0) {
-    mp4frag.sizeLimit = 5000000;
-  }
+  const sizeLimit = Number.isInteger(mp4frag.sizeLimit) && mp4frag.sizeLimit > 0 ? mp4frag.sizeLimit : 5000000;
 
-  if (!Number.isInteger(mp4frag.timeLimit) || mp4frag.timeLimit < 0) {
-    mp4frag.timeLimit = 10000;
-  }
-
-  const { httpMiddleware = null, ioMiddleware = null, sizeLimit, timeLimit } = mp4frag;
-
-  const { createNode, registerType } = RED.nodes;
+  const timeLimit = Number.isInteger(mp4frag.timeLimit) && mp4frag.timeLimit > 0 ? mp4frag.timeLimit : 10000;
 
   class Mp4fragNode {
     constructor(config) {
@@ -68,17 +62,13 @@ module.exports = RED => {
         throw new Error(_('mp4frag.error.base_path_invalid', { basePath: this.basePath }));
       }
 
-      if (typeof Mp4fragNode.basePathMap === 'undefined') {
-        Mp4fragNode.basePathMap = new Map();
-      } else {
-        const item = Mp4fragNode.basePathMap.get(this.basePath);
+      const item = Mp4fragNode.basePathMap.get(this.basePath);
 
-        if (typeof item !== 'undefined' && item !== this.id) {
-          throw new Error(_('mp4frag.error.base_path_duplicate', { basePath: this.basePath }));
-        }
+      if (typeof item === 'object' && item.id !== this.id) {
+        throw new Error(_('mp4frag.error.base_path_duplicate', { basePath: this.basePath }));
       }
 
-      Mp4fragNode.basePathMap.set(this.basePath, this.id);
+      Mp4fragNode.basePathMap.set(this.basePath, { id: this.id, running: false }); // todo add status running
 
       this.hlsPlaylistPath = `/mp4frag/${this.basePath}/hls.m3u8`;
 
@@ -134,10 +124,6 @@ module.exports = RED => {
           path: Mp4fragNode.ioPath,
           transports: ['websocket' /* , 'polling'*/],
         });
-      }
-
-      if (typeof Mp4fragNode.ioMiddleware === 'undefined') {
-        Mp4fragNode.ioMiddleware = ioMiddleware;
       }
 
       this.ioKey = randomBytes(15).toString('hex');
@@ -301,8 +287,6 @@ module.exports = RED => {
         Mp4fragNode.httpRouter = Router({ caseSensitive: true });
 
         Mp4fragNode.httpRouter.mp4fragRouter = true;
-
-        Mp4fragNode.httpMiddleware = httpMiddleware;
 
         if (Mp4fragNode.httpMiddleware !== null) {
           Mp4fragNode.httpRouter.use(Mp4fragNode.httpMiddleware);
@@ -622,6 +606,10 @@ module.exports = RED => {
 
     onInitialized(data) {
       this.status({ fill: 'green', shape: 'dot', text: data.mime });
+
+      const item = Mp4fragNode.basePathMap.get(this.basePath);
+
+      item.running = true;
     }
 
     onSegment(data) {
@@ -685,6 +673,10 @@ module.exports = RED => {
           }
         });
       }
+
+      const item = Mp4fragNode.basePathMap.get(this.basePath);
+
+      item.running = false;
     }
 
     onError(err) {
@@ -708,15 +700,15 @@ module.exports = RED => {
 
   Mp4fragNode.basePathRegex = /^[a-z0-9_.]{1,50}$/i;
 
-  Mp4fragNode.basePathMap = undefined;
+  Mp4fragNode.basePathMap = new Map();
 
   Mp4fragNode.ioPath = '/mp4frag/socket.io';
 
   Mp4fragNode.ioServer = undefined;
 
-  Mp4fragNode.ioMiddleware = undefined;
+  Mp4fragNode.ioMiddleware = ioMiddleware;
 
-  Mp4fragNode.httpMiddleware = undefined;
+  Mp4fragNode.httpMiddleware = httpMiddleware;
 
   Mp4fragNode.httpRouter = undefined;
 
@@ -730,8 +722,8 @@ module.exports = RED => {
     settings: {
       mp4frag: {
         value: {
-          timeLimit: Mp4fragNode.timeLimit,
-          sizeLimit: Mp4fragNode.sizeLimit,
+          timeLimit,
+          sizeLimit,
         },
         exportable: true,
       },
