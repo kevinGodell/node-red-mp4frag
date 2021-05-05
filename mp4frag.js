@@ -22,13 +22,9 @@ module.exports = RED => {
 
   const { mp4frag } = settings;
 
-  if (!Number.isInteger(mp4frag.sizeLimit) || mp4frag.sizeLimit < 0) {
-    mp4frag.sizeLimit = 5000000;
-  }
+  mp4frag.sizeLimit = Number.isInteger(mp4frag.sizeLimit) && mp4frag.sizeLimit > 0 ? mp4frag.sizeLimit : 5000000; // 5mb
 
-  if (!Number.isInteger(mp4frag.timeLimit) || mp4frag.timeLimit < 0) {
-    mp4frag.timeLimit = 10000;
-  }
+  mp4frag.timeLimit = Number.isInteger(mp4frag.timeLimit) && mp4frag.timeLimit > 0 ? mp4frag.timeLimit : 10000; // 10s
 
   const { httpMiddleware = null, ioMiddleware = null, sizeLimit, timeLimit } = mp4frag;
 
@@ -721,6 +717,10 @@ module.exports = RED => {
   const Mp4fragSettings = {
     settings: {
       mp4frag: {
+        value: {
+          timeLimit,
+          sizeLimit,
+        },
         exportable: true,
       },
     },
