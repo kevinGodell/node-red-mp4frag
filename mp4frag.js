@@ -692,7 +692,7 @@ module.exports = RED => {
 
       this.mp4frag.resetCache();
 
-      this.error(err);
+      // this.error(err);
 
       this.status({ fill: 'red', shape: 'dot', text: err.toString() });
     }
