@@ -16,13 +16,21 @@ module.exports = RED => {
     nodes: { createNode, registerType },
   } = RED;
 
-  const { mp4frag = {} } = settings;
+  if (typeof settings.mp4frag !== 'object') {
+    settings.mp4frag = {};
+  }
 
-  const { httpMiddleware = null, ioMiddleware = null } = mp4frag;
+  const { mp4frag } = settings;
 
-  const sizeLimit = Number.isInteger(mp4frag.sizeLimit) && mp4frag.sizeLimit > 0 ? mp4frag.sizeLimit : 5000000;
+  if (!Number.isInteger(mp4frag.sizeLimit) || mp4frag.sizeLimit < 0) {
+    mp4frag.sizeLimit = 5000000;
+  }
 
-  const timeLimit = Number.isInteger(mp4frag.timeLimit) && mp4frag.timeLimit > 0 ? mp4frag.timeLimit : 10000;
+  if (!Number.isInteger(mp4frag.timeLimit) || mp4frag.timeLimit < 0) {
+    mp4frag.timeLimit = 10000;
+  }
+
+  const { httpMiddleware = null, ioMiddleware = null, sizeLimit, timeLimit } = mp4frag;
 
   class Mp4fragNode {
     constructor(config) {
@@ -713,10 +721,6 @@ module.exports = RED => {
   const Mp4fragSettings = {
     settings: {
       mp4frag: {
-        value: {
-          timeLimit,
-          sizeLimit,
-        },
         exportable: true,
       },
     },
