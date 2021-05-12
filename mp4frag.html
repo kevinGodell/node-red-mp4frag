@@ -7,6 +7,10 @@
     hlsPlaylistExtraDef: 0,
     hlsPlaylistExtraMin: 0,
     hlsPlaylistExtraMax: 10,
+    timeLimitMin: -1,
+    timeLimitMax: Number.MAX_SAFE_INTEGER,
+    preBufferMin: 1,
+    preBufferMax: 5,
   };
 
   // register node
@@ -21,26 +25,54 @@
       migrate: {
         // migration versioning
         // flag for adding new defaults
-        value: 0.000000001,
+        value: 0.000000002,
       },
       hlsPlaylistSize: {
         value: MP4FRAG.hlsPlaylistSizeDef,
         required: true,
         validate: function (hlsPlaylistSize) {
-          return hlsPlaylistSize >= MP4FRAG.hlsPlaylistSizeMin && hlsPlaylistSize <= MP4FRAG.hlsPlaylistSizeMax;
+          const int = Number.parseInt(hlsPlaylistSize);
+
+          return int >= MP4FRAG.hlsPlaylistSizeMin && int <= MP4FRAG.hlsPlaylistSizeMax;
         },
       },
       hlsPlaylistExtra: {
         value: MP4FRAG.hlsPlaylistExtraDef,
         required: true,
         validate: function (hlsPlaylistExtra) {
-          return hlsPlaylistExtra >= MP4FRAG.hlsPlaylistExtraMin && hlsPlaylistExtra <= MP4FRAG.hlsPlaylistExtraMax;
+          const int = Number.parseInt(hlsPlaylistExtra);
+
+          return int >= MP4FRAG.hlsPlaylistExtraMin && int <= MP4FRAG.hlsPlaylistExtraMax;
         },
       },
       basePath: {
         value: '',
         required: true,
         validate: RED.validators.regex(/^[a-z0-9_.]{1,50}$/i),
+      },
+      repeated: {
+        value: RED.settings.mp4frag.repeated.toString(),
+        validate: function (repeated) {
+          const str = typeof repeated !== 'undefined' && repeated.toString();
+
+          return ['true', 'false'].includes(str);
+        },
+      },
+      timeLimit: {
+        value: RED.settings.mp4frag.timeLimit,
+        validate: function (timeLimit) {
+          const int = Number.parseInt(timeLimit);
+
+          return int >= MP4FRAG.timeLimitMin && int <= MP4FRAG.timeLimitMax;
+        },
+      },
+      preBuffer: {
+        value: RED.settings.mp4frag.preBuffer,
+        validate: function (preBuffer) {
+          const int = Number.parseInt(preBuffer);
+
+          return int >= MP4FRAG.preBufferMin && int <= MP4FRAG.preBufferMax;
+        },
       },
     },
     icon: 'font-awesome/fa-file-video-o',
@@ -50,7 +82,7 @@
       if (this.name) {
         return this.name;
       }
-      if (this.valid || (Array.isArray(this.validationErrors) && this.validationErrors.includes('basePath') === false)) {
+      if (this.valid || (Array.isArray(this.validationErrors) && !this.validationErrors.includes('basePath'))) {
         return `/mp4frag/${this.basePath}`;
       }
       return this.type;
@@ -58,31 +90,98 @@
     outputLabels: ['playlist', 'buffer'],
     outputs: 2, // todo editable
     oneditprepare: function () {
-      const basePath = $('#node-input-basePath')
-        .prop('placeholder', this.id)
-        .on('input', function () {
-          const newVal = this.value.replace(/[^a-z0-9_.]/gi, '');
-          if (this.value !== newVal) {
-            this.value = newVal;
-          }
-        });
+      const getIntFromVal = (min, max, def, val) => {
+        const int = Number.parseInt(val);
 
-      const hlsPlaylistSize = $('#node-input-hlsPlaylistSize').typedInput({
-        types: [
-          {
-            value: 'num',
-            icon: 'fa fa-list-ol',
-            options: ['2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20'],
-          },
-        ],
+        if (Number.isNaN(int)) {
+          return [def, true];
+        } else if (int < min) {
+          return [min, true];
+        } else if (int > max) {
+          return [max, true];
+        } else {
+          return [int, false];
+        }
+      };
+
+      const basePath = $('#node-input-basePath');
+
+      basePath.prop('placeholder', this.id);
+
+      basePath.on('input', () => {
+        const val = basePath.val();
+
+        const replace = val.replace(/[^a-z0-9_.]/gi, '');
+
+        basePath.val(replace);
       });
 
-      const hlsPlaylistExtra = $('#node-input-hlsPlaylistExtra').typedInput({
+      if (basePath.val() === '') {
+        basePath.val(this.id);
+      }
+
+      const hlsPlaylistSizeDef = this._def.defaults.hlsPlaylistSize.value;
+
+      const hlsPlaylistSize = $('#node-input-hlsPlaylistSize')
+        .spinner({
+          min: MP4FRAG.hlsPlaylistSizeMin,
+          max: MP4FRAG.hlsPlaylistSizeMax,
+          step: 1,
+          change: (event, ui) => {
+            const [int, changed] = getIntFromVal(MP4FRAG.hlsPlaylistSizeMin, MP4FRAG.hlsPlaylistSizeMax, MP4FRAG.hlsPlaylistSizeDef, hlsPlaylistSize.val());
+            changed ? hlsPlaylistSize.val(int).change() : hlsPlaylistSize.val(int);
+          },
+        })
+        .prop('placeholder', hlsPlaylistSizeDef);
+
+      const hlsPlaylistExtraDef = this._def.defaults.hlsPlaylistExtra.value;
+
+      const hlsPlaylistExtra = $('#node-input-hlsPlaylistExtra')
+        .spinner({
+          min: MP4FRAG.hlsPlaylistExtraMin,
+          max: MP4FRAG.hlsPlaylistExtraMax,
+          step: 1,
+          change: (event, ui) => {
+            const [int, changed] = getIntFromVal(MP4FRAG.hlsPlaylistExtraMin, MP4FRAG.hlsPlaylistExtraMax, MP4FRAG.hlsPlaylistExtraDef, hlsPlaylistExtra.val());
+            changed ? hlsPlaylistExtra.val(int).change() : hlsPlaylistExtra.val(int);
+          },
+        })
+        .prop('placeholder', hlsPlaylistExtraDef);
+
+      const timeLimitDef = this._def.defaults.timeLimit.value;
+
+      const timeLimit = $('#node-input-timeLimit')
+        .spinner({
+          min: MP4FRAG.timeLimitMin,
+          max: MP4FRAG.timeLimitMax,
+          step: 1,
+          change: (event, ui) => {
+            const [int, changed] = getIntFromVal(MP4FRAG.timeLimitMin, MP4FRAG.timeLimitMax, timeLimitDef, timeLimit.val());
+            changed ? timeLimit.val(int).change() : timeLimit.val(int);
+          },
+        })
+        .prop('placeholder', timeLimitDef);
+
+      const preBufferDef = this._def.defaults.preBuffer.value;
+
+      const preBuffer = $('#node-input-preBuffer')
+        .spinner({
+          min: MP4FRAG.preBufferMin,
+          max: MP4FRAG.preBufferMax,
+          step: 1,
+          change: (event, ui) => {
+            const [int, changed] = getIntFromVal(MP4FRAG.preBufferMin, MP4FRAG.preBufferMax, preBufferDef, preBuffer.val());
+            changed ? preBuffer.val(int).change() : preBuffer.val(int);
+          },
+        })
+        .prop('placeholder', preBufferDef);
+
+      const repeated = $('#node-input-repeated').typedInput({
         types: [
           {
-            value: 'num',
-            icon: 'fa fa-list-ol',
-            options: ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'],
+            value: 'bool',
+            //icon: 'fa fa-list-ol',
+            options: ['false', 'true'],
           },
         ],
       });
@@ -90,33 +189,14 @@
       // migration code start
       if (typeof this.migrate === 'undefined' || this.migrate < this._def.defaults.migrate.value) {
         this.migrate = this._def.defaults.migrate.value;
-        //processVideo.prop('checked', this._def.defaults.processVideo.value);
-        //commandPath.val(this._def.defaults.commandPath.value);
-        //commandArgs.typedInput('value', this._def.defaults.commandArgs.value);
+
+        repeated.val(this._def.defaults.repeated.value.toString());
+
+        timeLimit.val(this._def.defaults.timeLimit.value);
+
+        preBuffer.val(this._def.defaults.preBuffer.value);
       }
       // migration code end
-
-      $('#mp4fragSizeLimit')
-        .val(`${RED.settings.mp4frag.sizeLimit} ${this._('mp4frag.label.bytes')}`)
-        .prop('readonly', true)
-        .on('click', () => {
-          RED.notify(this._('mp4frag.warning.size_limit', { sizeLimit: RED.settings.mp4frag.sizeLimit }), {
-            type: 'warning',
-            id: 'mp4frag',
-          });
-          // type/color: error = red, warning = orange, success = green, '' = blue
-        });
-
-      $('#mp4fragTimeLimit')
-        .val(`${RED.settings.mp4frag.timeLimit} ${this._('mp4frag.label.milliseconds')}`)
-        .prop('readonly', true)
-        .on('click', () => {
-          RED.notify(this._('mp4frag.warning.time_limit', { timeLimit: RED.settings.mp4frag.timeLimit }), {
-            type: 'warning',
-            id: 'mp4frag',
-          });
-          // type/color: error = red, warning = orange, success = green, '' = blue
-        });
 
       $('<button type="button" class="red-ui-button red-ui-button-small"><i class="fa fa-book"></i> help</button>')
         .on('click', () => {
@@ -136,7 +216,9 @@
 
   <fieldset>
     <legend>External Api</legend>
+
     <p class="form-tips">Unique value used for http routes and socket.io connections.</p>
+
     <div class="form-row">
       <label for="node-input-basePath"><i class="fa fa-globe"></i> URL</label>
       <label for="node-input-basePath" style="width:auto;"><code>/mp4frag/</code></label>
@@ -147,27 +229,48 @@
 
   <fieldset>
     <legend>HLS Playlist</legend>
-    <p class="form-tips">Size + Extra = total number of fragments held in memory.</p>
+
+    <p class="form-tips">Number of current segments listed in playlist (held in memory).</p>
+
     <div class="form-row">
       <label for="node-input-hlsPlaylistSize"><i class="fa fa-list-ol"></i> Size</label>
-      <input id="node-input-hlsPlaylistSize" />
+      <input style="width: auto; max-width: 130px; text-align:right; padding-right: 12px" id="node-input-hlsPlaylistSize" />
+      <label for="node-input-hlsPlaylistSize">segments</label>
     </div>
+
+    <p class="form-tips">Number of past segments beyond playlist (held in memory).</p>
+
     <div class="form-row">
       <label for="node-input-hlsPlaylistExtra"><i class="fa fa-list-ol"></i> Extra</label>
-      <input id="node-input-hlsPlaylistExtra" />
+      <input style="width: auto; max-width: 130px; text-align:right; padding-right: 12px" id="node-input-hlsPlaylistExtra" />
+      <label for="node-input-hlsPlaylistExtra">segments</label>
     </div>
   </fieldset>
 
   <fieldset>
     <legend>Buffer Output</legend>
-    <p class="form-tips">Video buffer output will stop when time limit or size limit is met.</p>
+
+    <p class="form-tips">Number of past keyframe segments to retrieve from buffer.</p>
+
     <div class="form-row">
-      <label for="mp4fragSizeLimit"><i class="fa fa-gears"></i> Size Limit</label>
-      <input type="text" id="mp4fragSizeLimit" />
+      <label for="node-input-preBuffer"><i class="fa fa-gears"></i> Pre Buffer</label>
+      <input style="width: auto; max-width: 130px; text-align:right; padding-right: 12px" id="node-input-preBuffer" />
+      <label for="node-input-preBuffer">keyframes</label>
     </div>
+
+    <p class="form-tips">Output will stop when time limit is reached. Use <code>-1</code> for no limit.</p>
+
     <div class="form-row">
-      <label for="mp4fragTimeLimit"><i class="fa fa-gears"></i> Time Limit</label>
-      <input type="text" id="mp4fragTimeLimit" />
+      <label for="node-input-timeLimit"><i class="fa fa-gears"></i> Time Limit</label>
+      <input style="width: auto; max-width: 130px; text-align:right; padding-right: 12px" id="node-input-timeLimit" />
+      <label for="node-input-timeLimit">milliseconds</label>
+    </div>
+
+    <p class="form-tips">Output will repeatedly start after stopping due to time limit.</p>
+
+    <div class="form-row">
+      <label for="node-input-repeated"><i class="fa fa-gears"></i> Repeated</label>
+      <input id="node-input-repeated" />
     </div>
   </fieldset>
 </script>
@@ -194,36 +297,48 @@
   action: {
     subject: 'write',
     command: 'start',
-    keyframe: -1,
-    timeLimit: 5000,
-    sizeLimit: 2500000
+  }
+}
+      </code></pre>
+      <pre class="form-tips" style="min-width: 450px"><code>
+{
+  action: {
+    subject: 'write',
+    command: 'start',
+    preBuffer: 2, // optional
+    timeLimit: 60000, // optional
+    repeated: true // optional
   }
 }
       </code></pre>
       <dl class="message-properties">
-        <dt class="optional">subject<span class="property-type">string</span></dt>
+        <dt class="required">subject<span class="property-type">string</span></dt>
         <dd>'write'</dd>
         <dd>Controls the video output buffer.</dd>
-        <dt class="optional">command<span class="property-type">string</span></dt>
-        <dd>'start' or 'stop'</dd>
+
+        <dt class="required">command<span class="property-type">string</span></dt>
+        <dd>'start' or 'stop' or 'restart'</dd>
         <dd>Start or stop writing video to the output buffer.</dd>
-        <dd>Passing 'start' while already writing will extend it by resetting the sizeLimit and timeLimit.</dd>
-        <dt class="optional">keyframe<span class="property-type">number</span></dt>
-        <dd>index, e.g. -1 or 0 or 5 or -3</dd>
-        <dd>-1 will retrieve newest segment from buffer array.</dd>
-        <dd>0 will retrieve oldest segment from buffer array.</dd>
-        <dd>Positive integer searches from start of buffer array.</dd>
-        <dd>Negative integer searches from end of buffer array.</dd>
-        <dt class="optional">sizeLimit<span class="property-type">number</span></dt>
-        <dd>bytes, e.g. 5000000</dd>
-        <dd>Can be less than or equal to the global value in settings.js</dd>
-        <dd>Video output buffer will stop when byte sizeLimit is reached.</dd>
-        <dd>Previously buffered video will not be factored into size calculation.</dd>
+        <dd>While in single mode, passing 'start' will reset the time limit to the new value.</dd>
+        <dd>While in unlimited or continuous mode, passing start will have no effect.</dd>
+        <dd>Restart is a convenience method that calls stop and start internally.</dd>
+
+        <dt class="optional">preBuffer<span class="property-type">number</span></dt>
+        <dd>1 - 5</dd>
+        <dd>Determines how much pre-buffer video to retrieve.</dd>
+        <dd>1 will retrieve the least segments from the buffer array.</dd>
+        <dd>5 will retrieve the most segments from the buffer array.</dd>
+
         <dt class="optional">timeLimit<span class="property-type">number</span></dt>
-        <dd>milliseconds, e.g. 5000</dd>
-        <dd>Can be less than or equal to the global value in settings.js</dd>
+        <dd>milliseconds</dd>
+        <dd>Use -1 to indicate no time limit.</dd>
+        <dd>60000 would be a time limit of 1 minute.</dd>
         <dd>Video output buffer will stop when milliseconds timeLimit is reached.</dd>
-        <dd>Previously buffered video will not be factored into time calculation.</dd>
+        <dd>Pre-buffer video will not be factored into time calculation.</dd>
+
+        <dt class="optional">repeated<span class="property-type">boolean</span></dt>
+        <dd>true or false</dd>
+        <dd>Automatically restart the buffer output after it stops due to time limit.</dd>
       </dl>
     </li>
   </ul>
@@ -282,12 +397,14 @@
   <p>The number of segments to keep referenced inside the m3u8 playlist.</p>
   <h5>Extra</h5>
   <p>
-    The number of extra segments to keep in memory beyond the playlist. This can be helpful if the video player falls behind and tries to
-    access a segment that is no longer referenced in the playlist.
+    The number of extra segments to keep in memory beyond the playlist. This can be helpful if the video player falls behind and tries to access a segment that
+    is no longer referenced in the playlist.
   </p>
   <h4>Video Output</h4>
-  <h5>Size Limit</h5>
-  <p>Video output will automatically stop when size limit is reached.</p>
+  <h5>Pre Buffer</h5>
+  <p>Output past video segments before pushing out live segments.</p>
   <h5>Time Limit</h5>
   <p>Video output will automatically stop when time limit is reached.</p>
+  <h5>Repeated</h5>
+  <p>Video output will repeatedly start again after stopping due to time limit.</p>
 </script>
