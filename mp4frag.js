@@ -8,6 +8,10 @@ const { randomBytes } = require('crypto');
 
 const Mp4Frag = require('mp4frag');
 
+const { promisify } = require('util');
+
+const sleep = promisify(setTimeout);
+
 module.exports = RED => {
   const {
     server,
@@ -15,18 +19,6 @@ module.exports = RED => {
     _,
     nodes: { createNode, registerType },
   } = RED;
-
-  if (typeof settings.mp4frag !== 'object') {
-    settings.mp4frag = {};
-  }
-
-  const { mp4frag } = settings;
-
-  mp4frag.sizeLimit = Number.isInteger(mp4frag.sizeLimit) && mp4frag.sizeLimit > 0 ? mp4frag.sizeLimit : 5000000; // 5mb
-
-  mp4frag.timeLimit = Number.isInteger(mp4frag.timeLimit) && mp4frag.timeLimit > 0 ? mp4frag.timeLimit : 10000; // 10s
-
-  const { httpMiddleware = null, ioMiddleware = null, sizeLimit, timeLimit } = mp4frag;
 
   class Mp4fragNode {
     constructor(config) {
@@ -38,7 +30,17 @@ module.exports = RED => {
 
       this.hlsPlaylistExtra = config.hlsPlaylistExtra;
 
+      this.repeated = config.repeated === 'true';
+
+      this.timeLimit = Mp4fragNode.getInt(-1, Number.MAX_SAFE_INTEGER, Mp4fragNode.timeLimit, config.timeLimit);
+
+      this.preBuffer = Mp4fragNode.getInt(-5, -1, Mp4fragNode.preBuffer, config.preBuffer);
+
       this.writing = false;
+
+      this.writeMode = undefined;
+
+      this.mp4fragWriter = undefined;
 
       try {
         this.createPaths(); // throws
@@ -216,7 +218,7 @@ module.exports = RED => {
 
               const startIndex = data.buffered === true ? 0 : -1;
 
-              const buffer = this.mp4frag.getSegmentList(startIndex, true);
+              const buffer = this.mp4frag.getSegmentList(startIndex, true, 1);
 
               if (Buffer.isBuffer(buffer)) {
                 socket.emit('segment', { segment: buffer, duration, timestamp, sequence });
@@ -258,10 +260,7 @@ module.exports = RED => {
     }
 
     destroyIoServer() {
-      const sockets =
-        this.ioServerOfNamespace.sockets instanceof Map
-          ? this.ioServerOfNamespace.sockets
-          : Object.values(this.ioServerOfNamespace.sockets);
+      const sockets = this.ioServerOfNamespace.sockets instanceof Map ? this.ioServerOfNamespace.sockets : Object.values(this.ioServerOfNamespace.sockets);
 
       sockets.forEach(socket => {
         if (socket.connected === true) {
@@ -400,7 +399,7 @@ module.exports = RED => {
 
           res.write(initialization);
 
-          const buffer = this.mp4frag.getSegmentList(-1, true);
+          const buffer = this.mp4frag.getSegmentList(-1, true, 1);
 
           if (Buffer.isBuffer(buffer)) {
             res.write(buffer);
@@ -492,70 +491,115 @@ module.exports = RED => {
       this.send({ /* topic: 'set_source', */ payload: this.payload });
     }
 
-    startWriting(config = {}) {
+    startWriting(preBuffer, timeLimit, repeated) {
+      if (this.writing === true) {
+        return;
+      }
+
       const { initialization } = this.mp4frag;
 
       if (initialization === null) {
         return;
       }
 
-      const startTime = Date.now();
+      repeated = typeof repeated === 'boolean' ? repeated : this.repeated;
 
-      this.endTime =
-        startTime +
-        (Number.isInteger(config.timeLimit) && config.timeLimit > 0
-          ? Math.min(config.timeLimit, Mp4fragNode.timeLimit)
-          : Mp4fragNode.timeLimit);
+      timeLimit = Mp4fragNode.getInt(-1, Number.MAX_SAFE_INTEGER, this.timeLimit, timeLimit);
 
-      this.sizeLimit =
-        Number.isInteger(config.sizeLimit) && config.sizeLimit > 0
-          ? Math.min(config.sizeLimit, Mp4fragNode.sizeLimit)
-          : Mp4fragNode.sizeLimit;
+      preBuffer = Mp4fragNode.getInt(1, 5, this.preBuffer, preBuffer);
 
-      this.byteLength = 0;
+      const unlimited = timeLimit === -1;
 
-      if (this.writing !== true) {
-        this.send([null, { action: { command: 'start' } }]);
+      const writeMode = unlimited ? 'unlimited' : repeated ? 'continuous' : 'single';
 
-        const { keyframe = -1 } = config;
+      /* console.log({
+        repeated,
+        timeLimit,
+        preBuffer,
+        unlimited,
+        writeMode
+      })*/
 
-        const buffer = this.mp4frag.getBuffer(keyframe, true);
+      this.send([null, { action: { command: 'start' } }]);
 
-        if (Buffer.isBuffer(buffer)) {
-          this.send([null, { payload: buffer }]);
-        } else {
-          this.send([null, { payload: initialization }]);
-        }
+      this.send([null, { topic: 'initialization', mode: writeMode, payload: initialization }]);
 
-        this.mp4fragWriter = segment => {
-          this.send([null, { payload: segment }]);
+      const buffer = this.mp4frag.getSegmentList(-1, true, preBuffer);
 
-          if ((this.byteLength += segment.byteLength) >= this.sizeLimit || Date.now() >= this.endTime) {
-            this.stopWriting();
+      if (Buffer.isBuffer(buffer)) {
+        this.send([null, { topic: 'pre_buffer', mode: writeMode, payload: buffer }]);
+      }
+
+      switch (writeMode) {
+        case 'unlimited':
+          {
+            this.mp4fragWriter = segment => {
+              this.send([null, { topic: 'segment', mode: writeMode, payload: segment }]);
+            };
+
+            this.writing = true;
+
+            this.writeMode = writeMode;
           }
-        };
+          break;
 
-        this.writing = true;
+        case 'single':
+          {
+            const endTime = Date.now() + timeLimit;
+
+            this.mp4fragWriter = segment => {
+              this.send([null, { topic: 'segment', mode: writeMode, payload: segment }]);
+
+              if (Date.now() >= endTime) {
+                this.stopWriting();
+              }
+            };
+
+            this.writing = true;
+
+            this.writeMode = writeMode;
+          }
+          break;
+
+        case 'continuous':
+          {
+            const endTime = Date.now() + timeLimit;
+
+            this.mp4fragWriter = async segment => {
+              this.send([null, { topic: 'segment', mode: writeMode, payload: segment }]);
+
+              if (Date.now() >= endTime) {
+                await this.stopWriting();
+
+                this.startWriting(preBuffer, timeLimit, repeated);
+              }
+            };
+
+            this.writing = true;
+
+            this.writeMode = writeMode;
+          }
+          break;
       }
     }
 
-    stopWriting() {
-      if (this.writing === true) {
-        this.writing = false;
-
-        this.send([null, { action: { command: 'stop' } }]);
-
-        this.mp4fragWriter = undefined;
-
-        this.byteLength = undefined;
-
-        this.sizeLimit = undefined;
-
-        this.endTime = undefined;
+    async stopWriting() {
+      if (this.writing !== true) {
+        return;
       }
+
+      this.writing = false;
+
+      this.writeMode = undefined;
+
+      this.mp4fragWriter = undefined;
+
+      this.send([null, { action: { command: 'stop' } }]);
+
+      await sleep(300);
     }
 
-    onInput(msg) {
+    async onInput(msg) {
       const { payload, action } = msg;
 
       if (Buffer.isBuffer(payload)) {
@@ -563,15 +607,20 @@ module.exports = RED => {
       }
 
       if (typeof action === 'object') {
-        const { subject } = action;
+        const { subject, command, preBuffer, timeLimit, repeated } = action;
 
         if (subject === 'write') {
-          const { command = 'stop' } = action;
-
-          if (command === 'start') {
-            this.startWriting(action);
-          } else {
-            this.stopWriting();
+          switch (command) {
+            case 'start':
+              this.startWriting(preBuffer, timeLimit, repeated);
+              break;
+            case 'restart':
+              await this.stopWriting();
+              this.startWriting(preBuffer, timeLimit, repeated);
+              break;
+            case 'stop':
+            default:
+              await this.stopWriting();
           }
         }
 
@@ -582,7 +631,7 @@ module.exports = RED => {
 
       // current method for resetting cache, grab exit code or signal from exec
       if (typeof code !== 'undefined' || typeof signal !== 'undefined') {
-        this.stopWriting();
+        await this.stopWriting();
 
         this.mp4frag.resetCache();
 
@@ -658,7 +707,7 @@ module.exports = RED => {
         });
       }
 
-      if (this.writing) {
+      if (this.writing && this.mp4fragWriter) {
         this.mp4fragWriter(segment);
       }
 
@@ -692,7 +741,35 @@ module.exports = RED => {
 
       this.status({ fill: 'red', shape: 'dot', text: err.toString() });
     }
+
+    static getInt(min, max, def, val) {
+      const int = Number.parseInt(val);
+
+      if (Number.isNaN(int)) {
+        return def;
+      } else if (int < min) {
+        return min;
+      } else if (int > max) {
+        return max;
+      } else {
+        return int;
+      }
+    }
   }
+
+  if (typeof settings.mp4frag !== 'object') {
+    settings.mp4frag = {};
+  }
+
+  const { mp4frag } = settings;
+
+  mp4frag.repeated = typeof mp4frag.repeated === 'boolean' ? mp4frag.repeated : false;
+
+  mp4frag.timeLimit = Mp4fragNode.getInt(-1, Number.MAX_SAFE_INTEGER, 10000, mp4frag.timeLimit);
+
+  mp4frag.preBuffer = Mp4fragNode.getInt(1, 5, 1, mp4frag.preBuffer);
+
+  const { httpMiddleware = null, ioMiddleware = null, repeated, timeLimit, preBuffer } = mp4frag;
 
   Mp4fragNode.basePathRegex = /^[a-z0-9_.]{1,50}$/i;
 
@@ -708,9 +785,11 @@ module.exports = RED => {
 
   Mp4fragNode.httpRouter = undefined;
 
-  Mp4fragNode.sizeLimit = sizeLimit;
+  Mp4fragNode.repeated = repeated;
 
   Mp4fragNode.timeLimit = timeLimit;
+
+  Mp4fragNode.preBuffer = preBuffer;
 
   Mp4fragNode.type = 'mp4frag';
 
@@ -718,8 +797,9 @@ module.exports = RED => {
     settings: {
       mp4frag: {
         value: {
+          preBuffer,
+          repeated,
           timeLimit,
-          sizeLimit,
         },
         exportable: true,
       },
