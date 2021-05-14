@@ -42,6 +42,8 @@ module.exports = RED => {
 
       this.mp4fragWriter = undefined;
 
+      this.endTime = undefined;
+
       try {
         this.createPaths(); // throws
 
@@ -492,10 +494,6 @@ module.exports = RED => {
     }
 
     startWriting(preBuffer, timeLimit, repeated) {
-      if (this.writing === true) {
-        return;
-      }
-
       const { initialization } = this.mp4frag;
 
       if (initialization === null) {
@@ -508,17 +506,14 @@ module.exports = RED => {
 
       preBuffer = Mp4fragNode.getInt(1, 5, this.preBuffer, preBuffer);
 
-      const unlimited = timeLimit === -1;
+      const writeMode = timeLimit === -1 ? 'unlimited' : repeated ? 'continuous' : 'single';
 
-      const writeMode = unlimited ? 'unlimited' : repeated ? 'continuous' : 'single';
-
-      /* console.log({
-        repeated,
-        timeLimit,
-        preBuffer,
-        unlimited,
-        writeMode
-      })*/
+      if (this.writing === true) {
+        if (writeMode === 'single' && this.writeMode === 'single') {
+          this.endTime = Date.now() + timeLimit;
+        }
+        return;
+      }
 
       this.send([null, { action: { command: 'start' } }]);
 
@@ -536,28 +531,20 @@ module.exports = RED => {
             this.mp4fragWriter = segment => {
               this.send([null, { topic: 'segment', mode: writeMode, payload: segment }]);
             };
-
-            this.writing = true;
-
-            this.writeMode = writeMode;
           }
           break;
 
         case 'single':
           {
-            const endTime = Date.now() + timeLimit;
+            this.endTime = Date.now() + timeLimit;
 
             this.mp4fragWriter = segment => {
               this.send([null, { topic: 'segment', mode: writeMode, payload: segment }]);
 
-              if (Date.now() >= endTime) {
+              if (Date.now() >= this.endTime) {
                 this.stopWriting();
               }
             };
-
-            this.writing = true;
-
-            this.writeMode = writeMode;
           }
           break;
 
@@ -574,13 +561,13 @@ module.exports = RED => {
                 this.startWriting(preBuffer, timeLimit, repeated);
               }
             };
-
-            this.writing = true;
-
-            this.writeMode = writeMode;
           }
           break;
       }
+
+      this.writing = true;
+
+      this.writeMode = writeMode;
     }
 
     async stopWriting() {
@@ -593,6 +580,8 @@ module.exports = RED => {
       this.writeMode = undefined;
 
       this.mp4fragWriter = undefined;
+
+      this.endTime = undefined;
 
       this.send([null, { action: { command: 'stop' } }]);
 
