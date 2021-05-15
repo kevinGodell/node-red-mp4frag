@@ -34,7 +34,7 @@
     "mp4frag": "^0.4.1"
   },
   "peerDependencies": {
-    "socket.io": "^2.3.0 || ^3.0.3",
+    "socket.io": "2 || 3 || 4",
     "express": "4"
   },
   "files": [
