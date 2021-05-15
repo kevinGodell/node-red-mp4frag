@@ -33,9 +33,6 @@
   "dependencies": {
     "mp4frag": "^0.4.1"
   },
-  "peerDependencies": {
-    "express": "4"
-  },
   "files": [
     "mp4frag.js",
     "mp4frag.html",
@@ -49,14 +46,15 @@
     }
   },
   "devDependencies": {
-    "eslint": "^7.25.0",
+    "eslint": "^7.26.0",
     "eslint-config-prettier": "^8.3.0",
     "eslint-plugin-prettier": "^3.4.0",
-    "prettier": "^2.2.1"
+    "prettier": "^2.3.0"
   },
   "optionalDependencies": {
     "bufferutil": "^4.0.3",
     "utf-8-validate": "^5.0.4",
-    "socket.io": "2 || 3 || 4"
+    "socket.io": "2 || 3 || 4",
+    "express": "4"
   }
 }
