@@ -1,11 +1,11 @@
 {
   "name": "node-red-contrib-mp4frag",
-  "version": "0.1.0",
-  "description": "node-red fragmented mp4 server",
+  "version": "0.1.0-beta.1",
+  "description": "Parse a fragmented mp4 from a buffer and serve it via socket.io, video.mp4, and HLS.",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "pack": "npm pack",
-    "pretty": "prettier --write *.html",
+    "pretty": "prettier --write **/*.html",
     "lint": "eslint --fix --ext .js --ignore-path .gitignore .",
     "clean": "npm run lint && npm run pretty"
   },
