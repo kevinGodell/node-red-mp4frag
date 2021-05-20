@@ -1,7 +1,7 @@
 {
   "name": "node-red-contrib-mp4frag",
   "version": "0.1.0-beta.1",
-  "description": "Parse a fragmented mp4 from a buffer and serve it via socket.io, video.mp4, and HLS.",
+  "description": "Parse a fragmented mp4 from a buffer and send it to another node or serve it via socket.io and http.",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "pack": "npm pack",
@@ -31,14 +31,13 @@
   },
   "homepage": "https://github.com/kevinGodell/node-red-contrib-mp4frag#readme",
   "dependencies": {
-    "mp4frag": "^0.4.1"
+    "mp4frag": "^0.4.1",
+    "express": "4"
   },
   "files": [
     "mp4frag.js",
     "mp4frag.html",
-    "locales/en-US/mp4frag.json",
-    "flows/flow1.json",
-    "flows/flow2.json"
+    "locales"
   ],
   "node-red": {
     "nodes": {
@@ -53,8 +52,9 @@
   },
   "optionalDependencies": {
     "bufferutil": "^4.0.3",
-    "utf-8-validate": "^5.0.4",
-    "socket.io": "2 || 3 || 4",
-    "express": "4"
+    "utf-8-validate": "^5.0.4"
+  },
+  "peerDependencies": {
+    "socket.io": "2 || 3 || 4"
   }
 }
