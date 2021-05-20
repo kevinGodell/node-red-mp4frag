@@ -1,76 +1,121 @@
 <script data-help-name="mp4frag" type="text/html">
-  <p>Parse a fragmented mp4 from a buffer and serve it via socket.io, video.mp4, and HLS.</p>
-  <p>The HLS can be consumed by an app such as VLC or ffmpeg, modern browsers using HLS.js, or natively in the Safari browser.</p>
+  <p>Parse a fragmented mp4 from a buffer and send it to another node or serve it via socket.io and http.</p>
+  <ul>
+    <li>socket.io: currently only works with <a href="https://github.com/kevinGodell/node-red-contrib-ui-mp4frag">node-red-contrib-ui-mp4frag</a></li>
+    <li>mp4 video path: <b>/mp4frag/<code>{basePath}</code>/video.mp4</b></li>
+    <li>hls playlist path: <b>/mp4frag/<code>{basePath}</code>/hls.m3u8</b></li>
+  </ul>
+
   <h3>Inputs</h3>
   <ul>
     <li>
-      <h4>Mp4 buffer</h4>
-      <p>Send a <code>msg</code> structured as:</p>
-      <pre class="form-tips" style="min-width: 450px"><code>
+      <h4>Buffer: mp4 video</h4>
+      <ul>
+        <li>must be continuous pieces from a single fragmented mp4</li>
+        <li>
+          send an input <code>msg</code> structured as:
+          <pre class="form-tips" style="min-width: 450px"><code>
 {
   payload: &lt;Buffer&gt;
 }
-      </code></pre>
+          </code></pre>
+        </li>
+      </ul>
     </li>
     <li>
-      <h4>Buffer Output Trigger</h4>
-      <p>Send a <code>msg</code> structured as:</p>
-      <pre class="form-tips" style="min-width: 450px"><code>
+      <h4>Command: start</h4>
+      <ul>
+        <li>optional properties: <code>preBuffer</code>, <code>timeLimit</code>, <code>repeated</code></li>
+        <li>
+          send an input <code>msg</code> structured as:
+          <pre class="form-tips" style="min-width: 450px"><code>
 {
   action: {
     subject: 'write',
     command: 'start',
+    // preBuffer: 2,
+    // timeLimit: 60000,
+    // repeated: true
   }
 }
-      </code></pre>
-      <pre class="form-tips" style="min-width: 450px"><code>
+          </code></pre>
+        </li>
+      </ul>
+    </li>
+    <li>
+      <h4>Command: stop</h4>
+      <ul>
+        <li>
+          send an input <code>msg</code> structured as:
+          <pre class="form-tips" style="min-width: 450px"><code>
 {
   action: {
     subject: 'write',
-    command: 'start',
-    preBuffer: 2, // optional
-    timeLimit: 60000, // optional
-    repeated: true // optional
+    command: 'stop',
   }
 }
-      </code></pre>
+          </code></pre>
+        </li>
+      </ul>
+    </li>
+    <li>
+      <h4>Command: restart</h4>
+      <ul>
+        <li>optional properties: <code>preBuffer</code>, <code>timeLimit</code>, <code>repeated</code></li>
+        <li>
+          send an input <code>msg</code> structured as:
+          <pre class="form-tips" style="min-width: 450px"><code>
+{
+  action: {
+    subject: 'write',
+    command: 'restart',
+    // preBuffer: 2,
+    // timeLimit: 60000,
+    // repeated: true
+  }
+}
+          </code></pre>
+        </li>
+      </ul>
+    </li>
+    <li>
+      <h4>Definitions:</h4>
       <dl class="message-properties">
         <dt class="required">subject<span class="property-type">string</span></dt>
         <dd>'write'</dd>
         <dd>Controls the video output buffer.</dd>
-
         <dt class="required">command<span class="property-type">string</span></dt>
         <dd>'start' or 'stop' or 'restart'</dd>
         <dd>Start or stop writing video to the output buffer.</dd>
         <dd>While in single mode, passing 'start' will reset the time limit to the new value.</dd>
         <dd>While in unlimited or continuous mode, passing start will have no effect.</dd>
         <dd>Restart is a convenience method that calls stop and start internally.</dd>
-
         <dt class="optional">preBuffer<span class="property-type">number</span></dt>
         <dd>1 - 5</dd>
         <dd>Determines how much pre-buffer video to retrieve.</dd>
-        <dd>1 will retrieve the least segments from the buffer array.</dd>
+        <dd>1 will retrieve the fewest segments from the buffer array.</dd>
         <dd>5 will retrieve the most segments from the buffer array.</dd>
-
         <dt class="optional">timeLimit<span class="property-type">number</span></dt>
         <dd>milliseconds</dd>
         <dd>Use -1 to indicate no time limit.</dd>
         <dd>60000 would be a time limit of 1 minute.</dd>
         <dd>Video output buffer will stop when milliseconds timeLimit is reached.</dd>
         <dd>Pre-buffer video will not be factored into time calculation.</dd>
-
         <dt class="optional">repeated<span class="property-type">boolean</span></dt>
         <dd>true or false</dd>
         <dd>Automatically restart the buffer output after it stops due to time limit.</dd>
       </dl>
     </li>
   </ul>
+
   <h3>Outputs</h3>
-  <ol>
+  <ul>
     <li>
       <h4>Playlist</h4>
-      <p>It will send a <code>msg</code> structured as:</p>
-      <pre class="form-tips" style="min-width: 450px"><code>
+      <ul>
+        <li>
+          sends an output <code>msg</code> structured as:
+          <pre class="form-tips" style="min-width: 450px"><code>
 {
   payload: {
     hlsPlaylist: '/mp4frag/front_door_10/hls.m3u8',
@@ -82,52 +127,114 @@
     }
   }
 }
-      </code></pre>
+          </code></pre>
+        </li>
+      </ul>
     </li>
     <li>
       <h4>Buffer</h4>
-      <p>When triggered, the buffer output will send fragmented mp4 video.</p>
-      <p>The starting <code>msg</code> is structured as:</p>
-      <pre class="form-tips" style="min-width: 450px"><code>
+      <ul>
+        <li>when started, the buffer output will send fragmented mp4 video</li>
+        <li>
+          as a convenience for downstream nodes, 3 types of outputs are used:
+          <ol>
+            <li>
+              the first output <code>msg</code> is structured as:
+              <pre class="form-tips" style="min-width: 450px"><code>
 {
   action: {
     command: 'start'
   }
 }
-      </code></pre>
-      <p>The buffer <code>msg</code> is structured as:</p>
-      <pre class="form-tips" style="min-width: 450px"><code>
+              </code></pre>
+            </li>
+            <li>
+              the next output <code>msg</code>s are structured as:
+              <pre class="form-tips" style="min-width: 450px"><code>
 {
+  topic: 'initialization' | 'segment',
+  mode: 'single' | 'continuous' | 'unlimited',
   payload: &lt;Buffer&gt;
 }
-      </code></pre>
-      <p>The stopping <code>msg</code> is structured as:</p>
-      <pre class="form-tips" style="min-width: 450px"><code>
+              </code></pre>
+            </li>
+            <li>
+              the last output <code>msg</code> is structured as:
+              <pre class="form-tips" style="min-width: 450px"><code>
 {
   action: {
     command: 'stop'
   }
 }
-      </code></pre>
+              </code></pre>
+            </li>
+          </ol>
+        </li>
+      </ul>
     </li>
-  </ol>
-  <h3>Settings</h3>
-  <h4>External API</h4>
-  <h5>URL</h5>
-  <p>Choose a unique value used for http routes and socket.io connections.</p>
-  <h4>HLS Playlist</h4>
-  <h5>Size</h5>
-  <p>The number of segments to keep referenced inside the m3u8 playlist.</p>
-  <h5>Extra</h5>
-  <p>
-    The number of extra segments to keep in memory beyond the playlist. This can be helpful if the video player falls behind and tries to access a segment that
-    is no longer referenced in the playlist.
-  </p>
-  <h4>Video Output</h4>
-  <h5>Pre Buffer</h5>
-  <p>Output past video segments before pushing out live segments.</p>
-  <h5>Time Limit</h5>
-  <p>Video output will automatically stop when time limit is reached.</p>
-  <h5>Repeated</h5>
-  <p>Video output will repeatedly start again after stopping due to time limit.</p>
+  </ul>
+
+  <h3>Properties</h3>
+  <ul>
+    <li>
+      <h4>External API</h4>
+      <ul>
+        <li>
+          <h5>Base Path</h5>
+          <ul>
+            <li>must be a unique value</li>
+            <li>used for http routes</li>
+            <li>used for socket.io connections</li>
+          </ul>
+        </li>
+      </ul>
+    </li>
+    <li>
+      <h4>HLS Playlist</h4>
+      <ul>
+        <li>
+          <h5>Size</h5>
+          <ul>
+            <li>number of current segments listed in playlist</li>
+            <li>larger number enables a smoother playback</li>
+            <li>larger number uses more memory</li>
+          </ul>
+        </li>
+        <li>
+          <h5>Extra</h5>
+          <ul>
+            <li>number of past segments beyond playlist</li>
+            <li>larger number enables a smoother playback</li>
+            <li>larger number uses more memory</li>
+          </ul>
+        </li>
+      </ul>
+    </li>
+    <li>
+      <h4>Buffer Output</h4>
+      <ul>
+        <li>
+          <h5>Pre Buffer</h5>
+          <ul>
+            <li>number of past video segments to output</li>
+            <li>precedes live video output</li>
+          </ul>
+        </li>
+        <li>
+          <h5>Time Limit</h5>
+          <ul>
+            <li>video output will stop when time limit is reached</li>
+            <li>use <code>-1</code> to indicate no time limit</li>
+          </ul>
+        </li>
+        <li>
+          <h5>Repeated</h5>
+          <ul>
+            <li>video output will repeatedly start again after stopping due to time limit</li>
+            <li>time limit must be set to a value greater than <code>-1</code> to use this feature</li>
+          </ul>
+        </li>
+      </ul>
+    </li>
+  </ul>
 </script>
