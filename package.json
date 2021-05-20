@@ -2,6 +2,7 @@
   "name": "node-red-contrib-mp4frag",
   "version": "0.1.0-beta.1",
   "description": "Parse a fragmented mp4 from a buffer and send it to another node or serve it via socket.io and http.",
+  "main": "mp4frag.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "pack": "npm pack",
@@ -35,7 +36,6 @@
     "express": "4"
   },
   "files": [
-    "mp4frag.js",
     "mp4frag.html",
     "locales"
   ],
