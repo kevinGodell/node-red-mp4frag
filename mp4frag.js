@@ -14,6 +14,7 @@ const sleep = promisify(setTimeout);
 
 module.exports = RED => {
   const {
+    httpNode,
     server,
     settings,
     _,
@@ -314,7 +315,7 @@ module.exports = RED => {
           res.type('json').send(JSON.stringify(basePathArray, null, 2));*/
         });
 
-        RED.httpNode.use('/mp4frag', Mp4fragNode.httpRouter);
+        httpNode.use('/mp4frag', Mp4fragNode.httpRouter);
       }
 
       this.resWaitingForSegments = new Set();
