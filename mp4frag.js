@@ -35,7 +35,7 @@ module.exports = RED => {
 
       this.timeLimit = Mp4fragNode.getInt(-1, Number.MAX_SAFE_INTEGER, Mp4fragNode.timeLimit, config.timeLimit);
 
-      this.preBuffer = Mp4fragNode.getInt(-5, -1, Mp4fragNode.preBuffer, config.preBuffer);
+      this.preBuffer = Mp4fragNode.getInt(1, 5, Mp4fragNode.preBuffer, config.preBuffer);
 
       this.writing = false;
 
@@ -84,6 +84,15 @@ module.exports = RED => {
       this.mp4VideoPath = `/mp4frag/${this.basePath}/video.mp4`;
 
       this.ioNamespace = `/${this.basePath}`;
+
+      this.topic = {
+        buffer: {
+          init: `/mp4frag/${this.basePath}/buffer/init`,
+          pre: `/mp4frag/${this.basePath}/buffer/pre`,
+          segment: `/mp4frag/${this.basePath}/buffer/segment`,
+        },
+        status: `/mp4frag/${this.basePath}/status`,
+      };
     }
 
     destroyPaths() {
@@ -516,21 +525,21 @@ module.exports = RED => {
         return;
       }
 
-      this.send([null, { action: { command: 'start' } }]);
+      this.send([null, { topic: this.topic.status, payload: 'start', action: { command: 'start' } }]);
 
-      this.send([null, { topic: 'initialization', mode: writeMode, payload: initialization }]);
+      this.send([null, { topic: this.topic.buffer.init, retain: true, mode: writeMode, payload: initialization }]);
 
       const buffer = this.mp4frag.getSegmentList(-1, true, preBuffer);
 
       if (Buffer.isBuffer(buffer)) {
-        this.send([null, { topic: 'pre_buffer', mode: writeMode, payload: buffer }]);
+        this.send([null, { topic: this.topic.buffer.pre, retain: false, mode: writeMode, payload: buffer }]);
       }
 
       switch (writeMode) {
         case 'unlimited':
           {
             this.mp4fragWriter = segment => {
-              this.send([null, { topic: 'segment', mode: writeMode, payload: segment }]);
+              this.send([null, { topic: this.topic.buffer.segment, retain: false, mode: writeMode, payload: segment }]);
             };
           }
           break;
@@ -540,7 +549,7 @@ module.exports = RED => {
             this.endTime = Date.now() + timeLimit;
 
             this.mp4fragWriter = segment => {
-              this.send([null, { topic: 'segment', mode: writeMode, payload: segment }]);
+              this.send([null, { topic: this.topic.buffer.segment, retain: false, mode: writeMode, payload: segment }]);
 
               if (Date.now() >= this.endTime) {
                 this.stopWriting();
@@ -554,7 +563,7 @@ module.exports = RED => {
             const endTime = Date.now() + timeLimit;
 
             this.mp4fragWriter = async segment => {
-              this.send([null, { topic: 'segment', mode: writeMode, payload: segment }]);
+              this.send([null, { topic: this.topic.buffer.segment, retain: false, mode: writeMode, payload: segment }]);
 
               if (Date.now() >= endTime) {
                 await this.stopWriting();
@@ -584,7 +593,9 @@ module.exports = RED => {
 
       this.endTime = undefined;
 
-      this.send([null, { action: { command: 'stop' } }]);
+      this.send([null, { topic: this.topic.buffer.init, retain: true, payload: null }]);
+
+      this.send([null, { topic: this.topic.status, payload: 'stop', action: { command: 'stop' } }]);
 
       await sleep(300);
     }
@@ -620,7 +631,7 @@ module.exports = RED => {
       const { code, signal } = payload;
 
       // current method for resetting cache, grab exit code or signal from exec
-      if (typeof code !== 'undefined' || typeof signal !== 'undefined') {
+      if (payload === 'stop' || typeof code !== 'undefined' || typeof signal !== 'undefined') {
         await this.stopWriting();
 
         this.mp4frag.resetCache();
