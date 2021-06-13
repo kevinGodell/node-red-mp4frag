@@ -87,11 +87,10 @@ module.exports = RED => {
 
       this.topic = {
         buffer: {
-          init: `/mp4frag/${this.basePath}/buffer/init`,
-          pre: `/mp4frag/${this.basePath}/buffer/pre`,
-          segment: `/mp4frag/${this.basePath}/buffer/segment`,
+          init: `mp4frag/${this.basePath}/buffer/init`,
+          pre: `mp4frag/${this.basePath}/buffer/pre`,
+          segment: `mp4frag/${this.basePath}/buffer/segment`,
         },
-        status: `/mp4frag/${this.basePath}/status`,
       };
     }
 
@@ -483,6 +482,18 @@ module.exports = RED => {
       }*/
     }
 
+    async reset() {
+      await this.stopWriting();
+
+      this.mp4frag.resetCache();
+
+      this.payload = '';
+
+      this.send({ /* topic: 'set_source', */ payload: this.payload });
+
+      this.status({ fill: 'green', shape: 'ring', text: _('mp4frag.info.reset') });
+    }
+
     destroy() {
       this.removeListener('input', this.onInput);
 
@@ -507,6 +518,7 @@ module.exports = RED => {
       const { initialization } = this.mp4frag;
 
       if (initialization === null) {
+        // todo console.log('mp4frag not initialized');
         return;
       }
 
@@ -524,8 +536,6 @@ module.exports = RED => {
         }
         return;
       }
-
-      this.send([null, { topic: this.topic.status, payload: 'start', action: { command: 'start' } }]);
 
       this.send([null, { topic: this.topic.buffer.init, retain: true, mode: writeMode, payload: initialization }]);
 
@@ -593,9 +603,7 @@ module.exports = RED => {
 
       this.endTime = undefined;
 
-      this.send([null, { topic: this.topic.buffer.init, retain: true, payload: null }]);
-
-      this.send([null, { topic: this.topic.status, payload: 'stop', action: { command: 'stop' } }]);
+      this.send([null, { topic: this.topic.buffer.init, retain: true, payload: Buffer.allocUnsafe(0) }]);
 
       await sleep(300);
     }
@@ -604,7 +612,15 @@ module.exports = RED => {
       const { payload, action } = msg;
 
       if (Buffer.isBuffer(payload)) {
-        return this.mp4frag.write(payload);
+        if (payload.length) {
+          this.mp4frag.write(payload);
+        } else {
+          // zero length buffer
+
+          await this.reset();
+        }
+
+        return;
       }
 
       if (typeof action === 'object') {
@@ -631,16 +647,8 @@ module.exports = RED => {
       const { code, signal } = payload;
 
       // current method for resetting cache, grab exit code or signal from exec
-      if (payload === 'stop' || typeof code !== 'undefined' || typeof signal !== 'undefined') {
-        await this.stopWriting();
-
-        this.mp4frag.resetCache();
-
-        this.payload = '';
-
-        this.send({ /* topic: 'set_source', */ payload: this.payload });
-
-        this.status({ fill: 'green', shape: 'ring', text: _('mp4frag.info.reset') });
+      if (typeof code !== 'undefined' || typeof signal !== 'undefined') {
+        await this.reset();
 
         return;
       }
