@@ -432,7 +432,23 @@ module.exports = RED => {
         if (params[5]) {
           res.type('json');
 
-          res.send(JSON.stringify({ payload: this.payload, mp4frag: this.mp4frag }, null, 2));
+          res.send(
+            JSON.stringify(
+              { payload: this.payload, mp4frag: this.mp4frag },
+              (key, value) => {
+                if (value && value.type === 'Buffer') {
+                  return `<Buffer ${value.data.length}>`;
+                }
+
+                if (key === '_m3u8' && typeof value === 'string') {
+                  return value.split('\n');
+                }
+
+                return value;
+              },
+              2
+            )
+          );
         }
       };
 
