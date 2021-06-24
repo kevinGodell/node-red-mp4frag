@@ -89,7 +89,7 @@ module.exports = RED => {
         buffer: {
           init: `mp4frag/${this.basePath}/buffer/init`,
           pre: `mp4frag/${this.basePath}/buffer/pre`,
-          segment: `mp4frag/${this.basePath}/buffer/segment`,
+          seg: `mp4frag/${this.basePath}/buffer/seg`,
         },
       };
     }
@@ -549,7 +549,7 @@ module.exports = RED => {
         case 'unlimited':
           {
             this.mp4fragWriter = segment => {
-              this.send([null, { topic: this.topic.buffer.segment, retain: false, mode: writeMode, payload: segment }]);
+              this.send([null, { topic: this.topic.buffer.seg, retain: false, mode: writeMode, payload: segment }]);
             };
           }
           break;
@@ -559,7 +559,7 @@ module.exports = RED => {
             this.endTime = Date.now() + timeLimit;
 
             this.mp4fragWriter = segment => {
-              this.send([null, { topic: this.topic.buffer.segment, retain: false, mode: writeMode, payload: segment }]);
+              this.send([null, { topic: this.topic.buffer.seg, retain: false, mode: writeMode, payload: segment }]);
 
               if (Date.now() >= this.endTime) {
                 this.stopWriting();
@@ -573,7 +573,7 @@ module.exports = RED => {
             const endTime = Date.now() + timeLimit;
 
             this.mp4fragWriter = async segment => {
-              this.send([null, { topic: this.topic.buffer.segment, retain: false, mode: writeMode, payload: segment }]);
+              this.send([null, { topic: this.topic.buffer.seg, retain: false, mode: writeMode, payload: segment }]);
 
               if (Date.now() >= endTime) {
                 await this.stopWriting();
