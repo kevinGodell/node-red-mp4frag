@@ -793,7 +793,7 @@ module.exports = RED => {
           return func;
         }
       } catch (e) {
-        console.error('mp4frag.filenameFunc should be a function returning a string');
+        console.error('mp4frag.filenameFunc must be a function returning a string');
       }
       return args => `mp4frag/${args.basePath}/${Date.now()}.mp4`;
     }
