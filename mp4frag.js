@@ -553,19 +553,21 @@ module.exports = RED => {
         return;
       }
 
-      this.send([null, { topic: this.topic.buffer.init, retain: true, mode: writeMode, payload: initialization }]);
+      const filename = Mp4fragNode.filenameFunc({ basePath: this.basePath });
+
+      this.send([null, { topic: this.topic.buffer.init, retain: true, mode: writeMode, payload: initialization, filename }]);
 
       const buffer = this.mp4frag.getSegmentList(-1, true, preBuffer);
 
       if (Buffer.isBuffer(buffer)) {
-        this.send([null, { topic: this.topic.buffer.pre, retain: false, mode: writeMode, payload: buffer }]);
+        this.send([null, { topic: this.topic.buffer.pre, retain: false, mode: writeMode, payload: buffer, filename }]);
       }
 
       switch (writeMode) {
         case 'unlimited':
           {
             this.mp4fragWriter = segment => {
-              this.send([null, { topic: this.topic.buffer.seg, retain: false, mode: writeMode, payload: segment }]);
+              this.send([null, { topic: this.topic.buffer.seg, retain: false, mode: writeMode, payload: segment, filename }]);
             };
           }
           break;
@@ -575,7 +577,7 @@ module.exports = RED => {
             this.endTime = Date.now() + timeLimit;
 
             this.mp4fragWriter = segment => {
-              this.send([null, { topic: this.topic.buffer.seg, retain: false, mode: writeMode, payload: segment }]);
+              this.send([null, { topic: this.topic.buffer.seg, retain: false, mode: writeMode, payload: segment, filename }]);
 
               if (Date.now() >= this.endTime) {
                 this.stopWriting();
@@ -589,7 +591,7 @@ module.exports = RED => {
             const endTime = Date.now() + timeLimit;
 
             this.mp4fragWriter = async segment => {
-              this.send([null, { topic: this.topic.buffer.seg, retain: false, mode: writeMode, payload: segment }]);
+              this.send([null, { topic: this.topic.buffer.seg, retain: false, mode: writeMode, payload: segment, filename }]);
 
               if (Date.now() >= endTime) {
                 await this.stopWriting();
@@ -604,6 +606,8 @@ module.exports = RED => {
       this.writing = true;
 
       this.writeMode = writeMode;
+
+      this.filename = filename;
     }
 
     async stopWriting() {
@@ -619,7 +623,9 @@ module.exports = RED => {
 
       this.endTime = undefined;
 
-      this.send([null, { topic: this.topic.buffer.init, retain: true, payload: Buffer.allocUnsafe(0) }]);
+      this.send([null, { topic: this.topic.buffer.init, retain: true, payload: Buffer.allocUnsafe(0), filename: this.filename }]);
+
+      this.filename = undefined;
 
       await sleep(300);
     }
@@ -780,6 +786,17 @@ module.exports = RED => {
         return int;
       }
     }
+
+    static getFilenameFunc(func) {
+      try {
+        if (typeof func === 'function' && typeof func({ basePath: 'test' }) === 'string') {
+          return func;
+        }
+      } catch (e) {
+        console.error('mp4frag.filenameFunc should be a function returning a string');
+      }
+      return args => `mp4frag/${args.basePath}/${Date.now()}.mp4`;
+    }
   }
 
   if (typeof settings.mp4frag !== 'object') {
@@ -794,7 +811,9 @@ module.exports = RED => {
 
   mp4frag.preBuffer = Mp4fragNode.getInt(1, 5, 1, mp4frag.preBuffer);
 
-  const { httpMiddleware = null, ioMiddleware = null, repeated, timeLimit, preBuffer } = mp4frag;
+  mp4frag.filenameFunc = Mp4fragNode.getFilenameFunc(mp4frag.filenameFunc);
+
+  const { httpMiddleware = null, ioMiddleware = null, repeated, timeLimit, preBuffer, filenameFunc } = mp4frag;
 
   Mp4fragNode.basePathRegex = /^[a-z0-9_.]{1,50}$/i;
 
@@ -815,6 +834,8 @@ module.exports = RED => {
   Mp4fragNode.timeLimit = timeLimit;
 
   Mp4fragNode.preBuffer = preBuffer;
+
+  Mp4fragNode.filenameFunc = filenameFunc;
 
   Mp4fragNode.type = 'mp4frag';
 
