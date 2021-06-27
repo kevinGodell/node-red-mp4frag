@@ -782,10 +782,10 @@ module.exports = RED => {
       }
     }
 
-    static getFilenameFunc(func) {
+    static getFilenameFunc(filenameFunc) {
       try {
-        if (typeof func === 'function' && typeof func({ basePath: 'test' }) === 'string') {
-          return func;
+        if (typeof filenameFunc !== 'undefined' && typeof filenameFunc({ basePath: 'test' }) === 'string') {
+          return filenameFunc;
         }
       } catch (err) {
         error(_('mp4frag.error.filenameFunc', { error: err.toString() }));
