@@ -19,6 +19,7 @@ module.exports = RED => {
     settings,
     _,
     nodes: { createNode, registerType },
+    log: { error },
   } = RED;
 
   class Mp4fragNode {
@@ -38,12 +39,6 @@ module.exports = RED => {
       this.preBuffer = Mp4fragNode.getInt(1, 5, Mp4fragNode.preBuffer, config.preBuffer);
 
       this.writing = false;
-
-      this.writeMode = undefined;
-
-      this.mp4fragWriter = undefined;
-
-      this.endTime = undefined;
 
       try {
         this.createPaths(); // throws
@@ -792,8 +787,8 @@ module.exports = RED => {
         if (typeof func === 'function' && typeof func({ basePath: 'test' }) === 'string') {
           return func;
         }
-      } catch (e) {
-        console.error('mp4frag.filenameFunc must be a function returning a string');
+      } catch (err) {
+        error(_('mp4frag.error.filenameFunc', { error: err.toString() }));
       }
       return args => `mp4frag/${args.basePath}/${Date.now()}.mp4`;
     }
