@@ -38,6 +38,8 @@ module.exports = RED => {
 
       this.preBuffer = Mp4fragNode.getInt(1, 5, Mp4fragNode.preBuffer, config.preBuffer);
 
+      this.autoStart = config.autoStart === 'true';
+
       this.writing = false;
 
       try {
@@ -529,7 +531,7 @@ module.exports = RED => {
       const { initialization } = this.mp4frag;
 
       if (initialization === null) {
-        // todo console.log('mp4frag not initialized');
+        this.status({ fill: 'yellow', shape: 'dot', text: _('mp4frag.warning.not_initialized') });
         return;
       }
 
@@ -550,19 +552,23 @@ module.exports = RED => {
 
       const filename = Mp4fragNode.filenameFunc({ basePath: this.basePath });
 
-      this.send([null, { topic: this.topic.buffer.init, retain: true, mode: writeMode, payload: initialization, filename }]);
+      this.send([null, { topic: this.topic.buffer.init, retain: true, writeMode, payload: initialization, filename, action: { command: 'start' } }]);
 
       const buffer = this.mp4frag.getSegmentList(-1, true, preBuffer);
 
       if (Buffer.isBuffer(buffer)) {
-        this.send([null, { topic: this.topic.buffer.pre, retain: false, mode: writeMode, payload: buffer, filename }]);
+        this.send([null, { topic: this.topic.buffer.pre, retain: false, writeMode, payload: buffer, filename }]);
       }
+
+      const topic = this.topic.buffer.seg;
+
+      const retain = false;
 
       switch (writeMode) {
         case 'unlimited':
           {
             this.mp4fragWriter = segment => {
-              this.send([null, { topic: this.topic.buffer.seg, retain: false, mode: writeMode, payload: segment, filename }]);
+              this.send([null, { topic, retain, writeMode, payload: segment, filename }]);
             };
           }
           break;
@@ -572,7 +578,7 @@ module.exports = RED => {
             this.endTime = Date.now() + timeLimit;
 
             this.mp4fragWriter = segment => {
-              this.send([null, { topic: this.topic.buffer.seg, retain: false, mode: writeMode, payload: segment, filename }]);
+              this.send([null, { topic, retain, writeMode, payload: segment, filename }]);
 
               if (Date.now() >= this.endTime) {
                 this.stopWriting();
@@ -586,7 +592,7 @@ module.exports = RED => {
             const endTime = Date.now() + timeLimit;
 
             this.mp4fragWriter = async segment => {
-              this.send([null, { topic: this.topic.buffer.seg, retain: false, mode: writeMode, payload: segment, filename }]);
+              this.send([null, { topic, retain, writeMode, payload: segment, filename }]);
 
               if (Date.now() >= endTime) {
                 await this.stopWriting();
@@ -702,6 +708,10 @@ module.exports = RED => {
         };
 
         this.send({ payload: this.payload });
+
+        if (this.autoStart === true) {
+          this.startWriting(this.preBuffer, this.timeLimit, this.repeated);
+        }
       }
 
       // trigger time range error
