@@ -17,7 +17,8 @@
     "warning": {
       "unknown_payload": "unknown payload \"__payload__\"",
       "size_limit": "Add property <strong>mp4frag.sizeLimit</strong> to <em>settings.js</em><hr/><code class=\"form-tips\">mp4frag: { sizeLimit: __sizeLimit__ }</code>",
-      "time_limit": "Add property <strong>mp4frag.timeLimit</strong> to <em>settings.js</em><hr/><code class=\"form-tips\">mp4frag: { timeLimit: __timeLimit__ }</code>"
+      "time_limit": "Add property <strong>mp4frag.timeLimit</strong> to <em>settings.js</em><hr/><code class=\"form-tips\">mp4frag: { timeLimit: __timeLimit__ }</code>",
+      "not_initialized": "not initialized"
     },
     "error": {
       "command_path_invalid": "commandPath \"__commandPath__\" is invalid",
