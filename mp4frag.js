@@ -399,8 +399,18 @@ module.exports = RED => {
         if (params[4]) {
           const { initialization } = this.mp4frag;
 
+          res.set('Accept-Ranges', 'none');
+
           if (!initialization) {
             return res.status(404).send(_('mp4frag.error.initialization_not_found', { basePath: this.basePath }));
+          }
+
+          if (typeof req.headers.range !== 'undefined') {
+            const results = /bytes=(?<start>\d+)-(?<end>\d*)/.exec(req.headers.range);
+
+            if (results && results.groups && results.groups.start && results.groups.end) {
+              return res.status(416).send(_('mp4frag.error.byte_range_requests_not_supported', { basePath: this.basePath }));
+            }
           }
 
           res.type('mp4');

@@ -30,6 +30,7 @@
       "segment_not_found": "segment __sequence__ not found for \"__basePath__\"",
       "mime_not_found": "mime not found for \"__basePath__\"",
       "initialization_not_found": "initialization fragment not found for \"__basePath__\"",
+      "byte_range_requests_not_supported": "byte range requests not supported for \"__basePath__\"",
       "filenameFunc": "mp4frag.filenameFunc \"__error__\""
     }
   }
