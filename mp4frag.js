@@ -12,6 +12,8 @@ const { promisify } = require('util');
 
 const sleep = promisify(setTimeout);
 
+const { name: packageName, version: packageVersion } = require('./package.json');
+
 module.exports = RED => {
   const {
     httpNode,
@@ -299,6 +301,21 @@ module.exports = RED => {
 
         Mp4fragNode.httpRouter.mp4fragRouter = true;
 
+        Mp4fragNode.httpRouter.use((req, res, next) => {
+          res.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+
+          res.set('Expires', '-1');
+
+          res.set('Pragma', 'no-cache');
+
+          // overwrite X-Powered-By Express header
+          res.set('X-Powered-By', `${packageName} ${packageVersion}`);
+
+          // note: X-Powered-By can be only removed from Router in middleware calling res.removeHeader('X-Powered-By');
+
+          next();
+        });
+
         if (Mp4fragNode.httpMiddleware !== null) {
           Mp4fragNode.httpRouter.use(Mp4fragNode.httpMiddleware);
         }
@@ -325,28 +342,76 @@ module.exports = RED => {
 
       this.resWaitingForSegments = new Set();
 
-      const pattern = `^\/${this.basePath}/(?:(hls.m3u8)|hls([0-9]+).m4s|(init-hls.mp4)|(hls.m3u8.txt)|(video.mp4)|(api.json))$`;
+      const httpRouter = Router({ caseSensitive: true });
 
-      this.routePath = new RegExp(pattern, 'i');
+      httpRouter.get('/', (req, res) => {
+        res.type('json');
 
-      const endpoint = (req, res) => {
-        if (typeof this.mp4frag === 'undefined') {
+        res.send(
+          JSON.stringify(
+            { payload: this.payload, mp4frag: this.mp4frag },
+            (key, value) => {
+              if (value && value.type === 'Buffer') {
+                return `<Buffer ${value.data.length}>`;
+              }
+
+              if (key === '_m3u8' && typeof value === 'string') {
+                return value.split('\n');
+              }
+
+              return value;
+            },
+            2
+          )
+        );
+      });
+
+      httpRouter.get('/video.mp4', (req, res) => {
+        res.set('Accept-Ranges', 'none');
+
+        if (/^bytes=\d+-\d+$/.test(req.headers.range) === false) {
+          if (typeof this.mp4frag === 'object') {
+            const { initialization } = this.mp4frag;
+
+            if (initialization) {
+              res.type('mp4');
+
+              res.write(initialization);
+
+              const buffer = this.mp4frag.getSegmentList(-1, true, 1);
+
+              if (Buffer.isBuffer(buffer)) {
+                res.write(buffer);
+              }
+
+              res.flush();
+
+              this.resWaitingForSegments.add(res);
+
+              return res.once('close', () => {
+                this.resWaitingForSegments instanceof Set && this.resWaitingForSegments.delete(res);
+
+                res.end();
+              });
+            }
+
+            return res.status(404).send(_('mp4frag.error.initialization_not_found', { basePath: this.basePath }));
+          }
+
           return res.status(404).send(_('mp4frag.error.mp4frag_not_found', { basePath: this.basePath }));
         }
 
-        const { params } = req;
+        res.status(416).send(_('mp4frag.error.byte_range_requests_not_supported', { basePath: this.basePath }));
+      });
 
-        if (params[0]) {
+      httpRouter.get('/hls.m3u8:isTxt(.txt)?', (req, res) => {
+        if (typeof this.mp4frag === 'object') {
           const { m3u8 } = this.mp4frag;
 
           if (m3u8) {
-            res.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+            const { isTxt } = req.params;
 
-            res.set('Expires', '-1');
-
-            res.set('Pragma', 'no-cache');
-
-            res.type('m3u8');
+            res.type(isTxt ? 'txt' : 'm3u8');
 
             return res.send(m3u8);
           }
@@ -354,8 +419,28 @@ module.exports = RED => {
           return res.status(404).send(_('mp4frag.error.m3u8_not_found', { basePath: this.basePath }));
         }
 
-        if (params[1]) {
-          const sequence = params[1];
+        res.status(404).send(_('mp4frag.error.mp4frag_not_found', { basePath: this.basePath }));
+      });
+
+      httpRouter.get('/init-hls.mp4', (req, res) => {
+        if (typeof this.mp4frag === 'object') {
+          const { initialization } = this.mp4frag;
+
+          if (initialization) {
+            res.type('mp4');
+
+            return res.send(initialization);
+          }
+
+          return res.status(404).send(_('mp4frag.error.initialization_not_found', { basePath: this.basePath }));
+        }
+
+        res.status(404).send(_('mp4frag.error.mp4frag_not_found', { basePath: this.basePath }));
+      });
+
+      httpRouter.get('/hls:sequence([0-9]+).m4s', (req, res) => {
+        if (typeof this.mp4frag === 'object') {
+          const { sequence } = req.params;
 
           const segment = this.mp4frag.getSegment(sequence);
 
@@ -372,94 +457,12 @@ module.exports = RED => {
           return res.status(404).send(_('mp4frag.error.segment_not_found', { sequence, basePath: this.basePath }));
         }
 
-        if (params[2]) {
-          const { initialization } = this.mp4frag;
+        res.status(404).send(_('mp4frag.error.mp4frag_not_found', { basePath: this.basePath }));
+      });
 
-          if (initialization) {
-            res.type('mp4');
+      httpRouter.basePath = this.basePath;
 
-            return res.send(initialization);
-          }
-
-          return res.status(404).send(_('mp4frag.error.initialization_not_found', { basePath: this.basePath }));
-        }
-
-        if (params[3]) {
-          const { m3u8 } = this.mp4frag;
-
-          if (m3u8) {
-            res.type('txt');
-
-            return res.send(m3u8);
-          }
-
-          return res.status(404).send(_('mp4frag.error.m3u8_not_found', { basePath: this.basePath }));
-        }
-
-        if (params[4]) {
-          const { initialization } = this.mp4frag;
-
-          res.set('Accept-Ranges', 'none');
-
-          if (!initialization) {
-            return res.status(404).send(_('mp4frag.error.initialization_not_found', { basePath: this.basePath }));
-          }
-
-          if (typeof req.headers.range !== 'undefined') {
-            const results = /bytes=(?<start>\d+)-(?<end>\d*)/.exec(req.headers.range);
-
-            if (results && results.groups && results.groups.start && results.groups.end) {
-              return res.status(416).send(_('mp4frag.error.byte_range_requests_not_supported', { basePath: this.basePath }));
-            }
-          }
-
-          res.type('mp4');
-
-          res.write(initialization);
-
-          const buffer = this.mp4frag.getSegmentList(-1, true, 1);
-
-          if (Buffer.isBuffer(buffer)) {
-            res.write(buffer);
-          }
-
-          res.flush();
-
-          this.resWaitingForSegments.add(res);
-
-          res.once('close', () => {
-            this.resWaitingForSegments instanceof Set && this.resWaitingForSegments.delete(res);
-
-            res.end();
-          });
-
-          return;
-        }
-
-        if (params[5]) {
-          res.type('json');
-
-          res.send(
-            JSON.stringify(
-              { payload: this.payload, mp4frag: this.mp4frag },
-              (key, value) => {
-                if (value && value.type === 'Buffer') {
-                  return `<Buffer ${value.data.length}>`;
-                }
-
-                if (key === '_m3u8' && typeof value === 'string') {
-                  return value.split('\n');
-                }
-
-                return value;
-              },
-              2
-            )
-          );
-        }
-      };
-
-      Mp4fragNode.httpRouter.route(this.routePath).get(endpoint);
+      Mp4fragNode.httpRouter.use(`/${this.basePath}`, httpRouter);
     }
 
     destroyHttpRoute() {
@@ -480,29 +483,12 @@ module.exports = RED => {
       for (let i = stack.length - 1; i >= 0; --i) {
         const layer = stack[i];
 
-        const path = layer.route && layer.route.path;
-
-        if (typeof path !== 'undefined' && path === this.routePath) {
+        if (layer.name === 'router' && layer.handle.basePath === this.basePath) {
           stack.splice(i, 1);
 
           break;
         }
       }
-
-      /* const { stack } = RED.httpNode._router;
-
-      for (let i = stack.length - 1; i >= 0; --i) {
-        const layer = stack[i];
-
-        if (layer.name === 'router' && layer.handle && layer.handle.mp4fragRouter === true) {
-
-          // remove router
-          stack.splice(i, 1);
-
-          break;
-        }
-
-      }*/
     }
 
     async reset() {
