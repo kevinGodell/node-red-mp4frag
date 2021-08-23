@@ -46,7 +46,7 @@
         },
       },
       basePath: {
-        value: '',
+        value: 'id',
         required: true,
         validate: RED.validators.regex(/^[a-z0-9_.]{1,50}$/i),
       },
@@ -81,6 +81,9 @@
     label: function () {
       if (this.name) {
         return this.name;
+      }
+      if (this.basePath === 'id') {
+        return `/mp4frag/${this.id}`;
       }
       if (this.valid || (Array.isArray(this.validationErrors) && !this.validationErrors.includes('basePath'))) {
         return `/mp4frag/${this.basePath}`;
@@ -117,7 +120,7 @@
       });
 
       if (basePath.val() === '') {
-        basePath.val(this.id);
+        basePath.val('id');
       }
 
       const hlsPlaylistSizeDef = this._def.defaults.hlsPlaylistSize.value;
