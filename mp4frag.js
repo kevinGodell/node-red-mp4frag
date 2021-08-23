@@ -28,7 +28,7 @@ module.exports = RED => {
     constructor(config) {
       createNode(this, config);
 
-      this.basePath = config.basePath;
+      this.basePath = config.basePath === 'id' ? this.id : config.basePath;
 
       this.hlsPlaylistSize = config.hlsPlaylistSize;
 
