@@ -355,8 +355,8 @@ module.exports = RED => {
                 return `<Buffer ${value.data.length}>`;
               }
 
-              if (key === '_m3u8' && typeof value === 'string') {
-                return value.split('\n');
+              if (key === 'm3u8' && typeof value === 'string') {
+                return value.split('\n').slice(0, -1);
               }
 
               return value;
@@ -854,4 +854,21 @@ module.exports = RED => {
   };
 
   registerType(Mp4fragNode.type, Mp4fragNode, Mp4fragSettings);
+};
+
+Mp4Frag.prototype.toJSON = function () {
+  return {
+    hlsPlaylistBase: this._hlsPlaylistBase,
+    hlsPlaylistInit: this._hlsPlaylistInit,
+    hlsPlaylistSize: this._hlsPlaylistSize,
+    hlsPlaylistExtra: this._hlsPlaylistExtra,
+    segmentCount: this._segmentCount,
+    initialization: this.initialization,
+    videoCodec: this.videoCodec,
+    audioCodec: this.audioCodec,
+    mime: this.mime,
+    m3u8: this.m3u8,
+    segmentObject: this.segmentObject,
+    segmentObjectList: this.segmentObjectList,
+  };
 };
