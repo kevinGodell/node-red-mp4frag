@@ -34,13 +34,13 @@ module.exports = RED => {
 
       this.hlsPlaylistExtra = config.hlsPlaylistExtra;
 
+      this.autoStart = config.autoStart === 'true';
+
       this.repeated = config.repeated === 'true';
 
       this.timeLimit = Mp4fragNode.getInt(-1, Number.MAX_SAFE_INTEGER, Mp4fragNode.timeLimit, config.timeLimit);
 
       this.preBuffer = Mp4fragNode.getInt(1, 5, Mp4fragNode.preBuffer, config.preBuffer);
-
-      this.autoStart = config.autoStart === 'true';
 
       this.writing = false;
 
@@ -806,6 +806,8 @@ module.exports = RED => {
 
   const { mp4frag } = settings;
 
+  mp4frag.autoStart = typeof mp4frag.autoStart === 'boolean' ? mp4frag.autoStart : false;
+
   mp4frag.repeated = typeof mp4frag.repeated === 'boolean' ? mp4frag.repeated : false;
 
   mp4frag.timeLimit = Mp4fragNode.getInt(-1, Number.MAX_SAFE_INTEGER, 10000, mp4frag.timeLimit);
@@ -814,7 +816,7 @@ module.exports = RED => {
 
   mp4frag.filenameFunc = Mp4fragNode.getFilenameFunc(mp4frag.filenameFunc);
 
-  const { httpMiddleware = null, ioMiddleware = null, repeated, timeLimit, preBuffer, filenameFunc } = mp4frag;
+  const { httpMiddleware = null, ioMiddleware = null, autoStart, repeated, timeLimit, preBuffer, filenameFunc } = mp4frag;
 
   Mp4fragNode.basePathRegex = /^[a-z0-9_.]{1,50}$/i;
 
@@ -844,6 +846,7 @@ module.exports = RED => {
     settings: {
       mp4frag: {
         value: {
+          autoStart,
           preBuffer,
           repeated,
           timeLimit,

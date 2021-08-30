@@ -22,11 +22,11 @@
       name: {
         value: '',
       },
-      migrate: {
+      /*migrate: {
         // migration versioning
         // flag for adding new defaults
         value: 0.000000002,
-      },
+      },*/
       hlsPlaylistSize: {
         value: MP4FRAG.hlsPlaylistSizeDef,
         required: true,
@@ -53,8 +53,6 @@
       repeated: {
         value: RED.settings.mp4frag.repeated.toString(),
         validate: function (repeated) {
-          const str = typeof repeated !== 'undefined' && repeated.toString();
-
           return ['true', 'false'].includes(str);
         },
       },
@@ -72,6 +70,12 @@
           const int = Number.parseInt(preBuffer);
 
           return int >= MP4FRAG.preBufferMin && int <= MP4FRAG.preBufferMax;
+        },
+      },
+      autoStart: {
+        value: RED.settings.mp4frag.autoStart.toString(),
+        validate: function (autoStart) {
+          return ['true', 'false'].includes(autoStart);
         },
       },
     },
@@ -151,6 +155,16 @@
         })
         .prop('placeholder', hlsPlaylistExtraDef);
 
+      const autoStart = $('#node-input-autoStart').typedInput({
+        types: [
+          {
+            value: 'bool',
+            //icon: 'fa fa-list-ol',
+            options: ['false', 'true'],
+          },
+        ],
+      });
+
       const timeLimitDef = this._def.defaults.timeLimit.value;
 
       const timeLimit = $('#node-input-timeLimit')
@@ -190,7 +204,7 @@
       });
 
       // migration code start
-      if (typeof this.migrate === 'undefined' || this.migrate < this._def.defaults.migrate.value) {
+      /*if (typeof this.migrate === 'undefined' || this.migrate < this._def.defaults.migrate.value) {
         this.migrate = this._def.defaults.migrate.value;
 
         repeated.val(this._def.defaults.repeated.value.toString());
@@ -198,7 +212,7 @@
         timeLimit.val(this._def.defaults.timeLimit.value);
 
         preBuffer.val(this._def.defaults.preBuffer.value);
-      }
+      }*/
       // migration code end
 
       $('<button type="button" class="red-ui-button red-ui-button-small"><i class="fa fa-book"></i> help</button>')
@@ -252,6 +266,13 @@
 
   <fieldset>
     <legend>Buffer Output</legend>
+
+    <p class="form-tips">Automatically start buffer output after first segment is ready.</p>
+
+    <div class="form-row">
+      <label for="node-input-autoStart"><i class="fa fa-gears"></i> Auto Start</label>
+      <input id="node-input-autoStart" />
+    </div>
 
     <p class="form-tips">Number of past keyframe segments to retrieve from buffer.</p>
 
