@@ -111,13 +111,94 @@ module.exports = RED => {
         hlsPlaylistInit: true,
       });
 
-      this.mp4frag.on('initialized', data => this.onInitialized(data));
+      this.mp4frag.on('initialized', data => {
+        this.status({ fill: 'green', shape: 'dot', text: data.mime });
 
-      this.mp4frag.on('segment', data => this.onSegment(data));
+        const item = Mp4fragNode.basePathMap.get(this.basePath);
 
-      this.mp4frag.on('error', err => this.onError(err));
+        item.running = true;
+      });
 
-      this.mp4frag.on('reset', () => this.onReset());
+      this.mp4frag.on('segment', data => {
+        const { segment, sequence, duration, keyframe } = data;
+
+        if (sequence === 0) {
+          this.payload = {
+            hlsPlaylist: this.hlsPlaylistPath,
+            mp4Video: this.mp4VideoPath,
+            socketIo: { path: Mp4fragNode.ioPath, namespace: this.ioNamespace, key: this.ioKey },
+          };
+
+          this.send({ payload: this.payload });
+
+          if (this.autoStart === true) {
+            this.startWriting(this.preBuffer, this.timeLimit, this.repeated);
+          }
+        }
+
+        // trigger time range error
+        /* if (sequence % 50 === 0) {
+          return;
+        }*/
+
+        if (this.ioSocketWaitingForSegments.size > 0) {
+          this.ioSocketWaitingForSegments.forEach((all, socket, map) => {
+            if (socket.connected === true) {
+              socket.emit('segment', data);
+
+              if (all === false) {
+                this.ioSocketWaitingForSegments.delete(socket);
+              }
+            } else {
+              this.ioSocketWaitingForSegments.delete(socket);
+            }
+          });
+        }
+
+        if (this.resWaitingForSegments.size > 0) {
+          this.resWaitingForSegments.forEach(res => {
+            if (res.writableEnded === false || res.finished === false) {
+              res.write(segment);
+
+              res.flush();
+            }
+          });
+        }
+
+        if (this.writing && this.mp4fragWriter) {
+          this.mp4fragWriter(segment);
+        }
+
+        this.status({
+          fill: this.writing ? 'yellow' : 'green',
+          shape: 'dot',
+          text: _('mp4frag.info.segment', { sequence, duration: duration.toFixed(2), keyframe: keyframe > -1 }),
+        });
+      });
+
+      this.mp4frag.on('error', async err => {
+        await this.stopWriting();
+
+        this.mp4frag.resetCache();
+
+        // this.error(err);
+
+        this.status({ fill: 'red', shape: 'dot', text: err.toString() });
+      });
+
+      this.mp4frag.on('reset', () => {
+        if (this.resWaitingForSegments.size > 0) {
+          this.resWaitingForSegments.forEach(res => {
+            if (res.writableEnded === false || res.finished === false) {
+              res.end();
+            }
+          });
+        }
+
+        const item = Mp4fragNode.basePathMap.get(this.basePath);
+
+        item.running = false;
+      });
     }
 
     destroyMp4frag() {
@@ -683,95 +764,6 @@ module.exports = RED => {
       }
 
       done();
-    }
-
-    onInitialized(data) {
-      this.status({ fill: 'green', shape: 'dot', text: data.mime });
-
-      const item = Mp4fragNode.basePathMap.get(this.basePath);
-
-      item.running = true;
-    }
-
-    onSegment(data) {
-      const { segment, sequence, duration, keyframe } = data;
-
-      if (sequence === 0) {
-        this.payload = {
-          hlsPlaylist: this.hlsPlaylistPath,
-          mp4Video: this.mp4VideoPath,
-          socketIo: { path: Mp4fragNode.ioPath, namespace: this.ioNamespace, key: this.ioKey },
-        };
-
-        this.send({ payload: this.payload });
-
-        if (this.autoStart === true) {
-          this.startWriting(this.preBuffer, this.timeLimit, this.repeated);
-        }
-      }
-
-      // trigger time range error
-      /* if (sequence % 50 === 0) {
-        return;
-      }*/
-
-      if (this.ioSocketWaitingForSegments.size > 0) {
-        this.ioSocketWaitingForSegments.forEach((all, socket, map) => {
-          if (socket.connected === true) {
-            socket.emit('segment', data);
-
-            if (all === false) {
-              this.ioSocketWaitingForSegments.delete(socket);
-            }
-          } else {
-            this.ioSocketWaitingForSegments.delete(socket);
-          }
-        });
-      }
-
-      if (this.resWaitingForSegments.size > 0) {
-        this.resWaitingForSegments.forEach(res => {
-          if (res.writableEnded === false || res.finished === false) {
-            res.write(segment);
-
-            res.flush();
-          }
-        });
-      }
-
-      if (this.writing && this.mp4fragWriter) {
-        this.mp4fragWriter(segment);
-      }
-
-      this.status({
-        fill: this.writing ? 'yellow' : 'green',
-        shape: 'dot',
-        text: _('mp4frag.info.segment', { sequence, duration: duration.toFixed(2), keyframe: keyframe > -1 }),
-      });
-    }
-
-    onReset() {
-      if (this.resWaitingForSegments.size > 0) {
-        this.resWaitingForSegments.forEach(res => {
-          if (res.writableEnded === false || res.finished === false) {
-            res.end();
-          }
-        });
-      }
-
-      const item = Mp4fragNode.basePathMap.get(this.basePath);
-
-      item.running = false;
-    }
-
-    onError(err) {
-      this.stopWriting();
-
-      this.mp4frag.resetCache();
-
-      // this.error(err);
-
-      this.status({ fill: 'red', shape: 'dot', text: err.toString() });
     }
 
     static getInt(min, max, def, val) {
