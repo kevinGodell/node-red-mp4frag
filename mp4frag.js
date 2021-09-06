@@ -584,12 +584,12 @@ module.exports = RED => {
       this.status({ fill: 'green', shape: 'ring', text: _('mp4frag.info.reset') });
     }
 
-    destroy() {
+    async destroy() {
       this.removeListener('input', this.onInput);
 
       this.removeListener('close', this.onClose);
 
-      this.stopWriting();
+      await this.stopWriting();
 
       this.destroyHttpRoute();
 
@@ -654,11 +654,11 @@ module.exports = RED => {
           {
             this.endTime = Date.now() + timeLimit;
 
-            this.mp4fragWriter = segment => {
+            this.mp4fragWriter = async segment => {
               this.send([null, { topic, retain, writeMode, payload: segment, filename }]);
 
               if (Date.now() >= this.endTime) {
-                this.stopWriting();
+                await this.stopWriting();
               }
             };
           }
@@ -693,7 +693,9 @@ module.exports = RED => {
         return;
       }
 
-      this.writing = false;
+      const { filename } = this;
+
+      this.filename = undefined;
 
       this.writeMode = undefined;
 
@@ -701,11 +703,13 @@ module.exports = RED => {
 
       this.endTime = undefined;
 
-      this.send([null, { topic: this.topic.buffer.init, retain: true, payload: Buffer.allocUnsafe(0), filename: this.filename }]);
+      await sleep(200);
 
-      this.filename = undefined;
+      this.send([null, { topic: this.topic.buffer.init, retain: true, payload: Buffer.allocUnsafe(0), filename }]);
 
-      await sleep(300);
+      await sleep(100);
+
+      this.writing = false;
     }
 
     async onInput(msg) {
@@ -730,12 +734,17 @@ module.exports = RED => {
           switch (command) {
             case 'start':
               this.startWriting(preBuffer, timeLimit, repeated);
+
               break;
+
             case 'restart':
               await this.stopWriting();
+
               this.startWriting(preBuffer, timeLimit, repeated);
+
               break;
             case 'stop':
+
             default:
               await this.stopWriting();
           }
@@ -754,8 +763,8 @@ module.exports = RED => {
       }
     }
 
-    onClose(removed, done) {
-      this.destroy();
+    async onClose(removed, done) {
+      await this.destroy();
 
       if (removed) {
         this.status({ fill: 'grey', shape: 'ring', text: _('mp4frag.info.removed') });
