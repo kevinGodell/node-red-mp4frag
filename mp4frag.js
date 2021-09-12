@@ -120,7 +120,7 @@ module.exports = RED => {
       });
 
       this.mp4frag.on('segment', data => {
-        const { segment, sequence, duration, keyframe } = data;
+        const { segment, sequence, duration, keyframe, timestamp } = data;
 
         if (sequence === 0) {
           this.payload = {
@@ -166,7 +166,7 @@ module.exports = RED => {
         }
 
         if (this.writing && this.mp4fragWriter) {
-          this.mp4fragWriter(segment);
+          this.mp4fragWriter(segment, sequence, duration, timestamp);
         }
 
         this.status({
@@ -305,14 +305,26 @@ module.exports = RED => {
                 this.ioSocketWaitingForSegments.set(socket, false);
               }
             } else {
-              const { duration, timestamp, sequence } = this.mp4frag;
+              // const startIndex = data.buffered === true ? 0 : -1;
 
-              const startIndex = data.buffered === true ? 0 : -1;
+              const lastIndex = this.mp4frag.getSegmentObjectLastIndex(1);
 
-              const buffer = this.mp4frag.getSegmentList(startIndex, true, 1);
+              if (lastIndex > -1) {
+                const { segmentObjects, sequence, timestamp } = this.mp4frag;
 
-              if (Buffer.isBuffer(buffer)) {
-                socket.emit('segment', { segment: buffer, duration, timestamp, sequence });
+                let duration = 0;
+
+                const segments = [];
+
+                segmentObjects.slice(lastIndex).forEach(segmentObject => {
+                  segments.push(segmentObject.segment);
+
+                  duration += segmentObject.duration;
+                });
+
+                const segment = segments.length === 1 ? segments[0] : Buffer.concat(segments);
+
+                socket.emit('segment', { segment, duration, timestamp, sequence });
 
                 if (data.all !== false) {
                   this.ioSocketWaitingForSegments.set(socket, true);
@@ -459,10 +471,19 @@ module.exports = RED => {
 
               res.write(initialization);
 
-              const buffer = this.mp4frag.getSegmentList(-1, true, 1);
+              const preBuffer = (val => {
+                val = parseInt(val);
+                return isNaN(val) || val < 1 ? 1 : val > 10 ? 10 : val;
+              })(req.query.preBuffer);
 
-              if (Buffer.isBuffer(buffer)) {
-                res.write(buffer);
+              const lastIndex = this.mp4frag.getSegmentObjectLastIndex(preBuffer);
+
+              if (lastIndex > -1) {
+                const { segmentObjects } = this.mp4frag;
+
+                segmentObjects.slice(lastIndex).forEach(segmentObject => {
+                  res.write(segmentObject.segment);
+                });
               }
 
               res.flush();
@@ -523,16 +544,16 @@ module.exports = RED => {
         if (typeof this.mp4frag === 'object') {
           const { sequence } = req.params;
 
-          const segment = this.mp4frag.getSegment(sequence);
+          const segmentObject = this.mp4frag.getSegmentObject(sequence);
 
-          if (segment) {
+          if (segmentObject) {
             // res.type('m4s'); <-- not yet supported, filed issue https://github.com/jshttp/mime-db/issues/216
 
             // res.type('mp4');
 
             res.set('Content-Type', 'video/iso.segment');
 
-            return res.send(segment);
+            return res.send(segmentObject.segment);
           }
 
           return res.status(404).send(_('mp4frag.error.segment_not_found', { sequence, basePath: this.basePath }));
@@ -631,10 +652,28 @@ module.exports = RED => {
 
       this.send([null, { topic: this.topic.buffer.init, retain: true, writeMode, payload: initialization, filename, action: { command: 'start' } }]);
 
-      const buffer = this.mp4frag.getSegmentList(-1, true, preBuffer);
+      const lastIndex = this.mp4frag.getSegmentObjectLastIndex(preBuffer);
 
-      if (Buffer.isBuffer(buffer)) {
-        this.send([null, { topic: this.topic.buffer.pre, retain: false, writeMode, payload: buffer, filename }]);
+      if (lastIndex > -1) {
+        const { segmentObjects, sequence, timestamp } = this.mp4frag;
+
+        let duration = 0;
+
+        const segments = [];
+
+        segmentObjects.slice(lastIndex).forEach(segmentObject => {
+          segments.push(segmentObject.segment);
+
+          duration += segmentObject.duration;
+        });
+
+        const topic = this.topic.buffer.pre;
+
+        const retain = false;
+
+        const payload = segments.length === 1 ? segments[0] : Buffer.concat(segments);
+
+        this.send([null, { topic, retain, writeMode, payload, filename, duration, timestamp, sequence }]);
       }
 
       const topic = this.topic.buffer.seg;
@@ -644,8 +683,8 @@ module.exports = RED => {
       switch (writeMode) {
         case 'unlimited':
           {
-            this.mp4fragWriter = segment => {
-              this.send([null, { topic, retain, writeMode, payload: segment, filename }]);
+            this.mp4fragWriter = (segment, sequence, duration, timestamp) => {
+              this.send([null, { topic, retain, writeMode, payload: segment, filename, sequence, duration, timestamp }]);
             };
           }
           break;
@@ -654,8 +693,8 @@ module.exports = RED => {
           {
             this.endTime = Date.now() + timeLimit;
 
-            this.mp4fragWriter = async segment => {
-              this.send([null, { topic, retain, writeMode, payload: segment, filename }]);
+            this.mp4fragWriter = async (segment, sequence, duration, timestamp) => {
+              this.send([null, { topic, retain, writeMode, payload: segment, filename, sequence, duration, timestamp }]);
 
               if (Date.now() >= this.endTime) {
                 await this.stopWriting();
@@ -668,8 +707,8 @@ module.exports = RED => {
           {
             const endTime = Date.now() + timeLimit;
 
-            this.mp4fragWriter = async segment => {
-              this.send([null, { topic, retain, writeMode, payload: segment, filename }]);
+            this.mp4fragWriter = async (segment, sequence, duration, timestamp) => {
+              this.send([null, { topic, retain, writeMode, payload: segment, filename, sequence, duration, timestamp }]);
 
               if (Date.now() >= endTime) {
                 await this.stopWriting();
@@ -873,6 +912,24 @@ Mp4Frag.prototype.toJSON = function () {
     mime: this.mime,
     m3u8: this.m3u8,
     segmentObject: this.segmentObject,
-    segmentObjectList: this.segmentObjectList,
+    segmentObjects: this.segmentObjects,
   };
+};
+
+Mp4Frag.prototype.getSegmentObjectLastIndex = function (limit) {
+  let lastIndex = -1;
+
+  if (this._segmentObjects && this._segmentObjects.length) {
+    let count = 0;
+
+    for (let i = this._segmentObjects.length - 1; i >= 0 && count < limit; --i) {
+      if (this._allKeyframes || this._segmentObjects[i].keyframe > -1) {
+        lastIndex = i;
+
+        ++count;
+      }
+    }
+  }
+
+  return lastIndex;
 };
