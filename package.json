@@ -1,6 +1,6 @@
 {
   "name": "node-red-contrib-mp4frag",
-  "version": "0.1.0-beta.5",
+  "version": "0.1.0-beta.7",
   "description": "Parse a fragmented mp4 from a buffer and send it to another node or serve it via socket.io and http.",
   "main": "mp4frag.js",
   "scripts": {
@@ -35,18 +35,18 @@
     "eslint": "^7.32.0",
     "eslint-config-prettier": "^8.3.0",
     "eslint-plugin-prettier": "^3.4.1",
-    "prettier": "^2.3.2"
+    "prettier": "^2.5.0"
   },
   "optionalDependencies": {
     "bufferutil": "^4.0.3",
     "utf-8-validate": "^5.0.4"
   },
   "peerDependencies": {
-    "socket.io": "2 || 3 || 4"
+    "socket.io": ">=2"
   },
   "dependencies": {
     "express": "4",
-    "mp4frag": "^0.4.2"
+    "mp4frag": "github:kevinGodell/mp4frag#0.5.0"
   },
   "files": [
     "mp4frag.html",
@@ -56,5 +56,8 @@
     "nodes": {
       "mp4frag": "mp4frag.js"
     }
+  },
+  "engines": {
+    "node": ">=12"
   }
 }
