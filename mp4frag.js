@@ -169,10 +169,18 @@ module.exports = RED => {
           this.mp4fragWriter(segment, sequence, duration, timestamp);
         }
 
+        const { totalDuration, totalByteLength } = this.mp4frag;
+
         this.status({
           fill: this.writing ? 'yellow' : 'green',
           shape: 'dot',
-          text: _('mp4frag.info.segment', { sequence, duration: duration.toFixed(2), keyframe: keyframe > -1 }),
+          text: _('mp4frag.info.segment', {
+            sequence,
+            duration: duration.toFixed(2),
+            keyframe: keyframe > -1 ? 1 : 0,
+            totalDuration: totalDuration.toFixed(2),
+            totalByteLength: (totalByteLength / 1000000).toFixed(2),
+          }),
         });
       });
 
