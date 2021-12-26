@@ -11,7 +11,7 @@
       "removed": "removed",
       "closed": "closed",
       "reset": "reset",
-      "segment": "s: __sequence__, d: __duration__, k: __keyframe__"
+      "segment": "s: __sequence__, d: __duration__, k: __keyframe__, t: __totalDuration__, b: __totalByteLength__"
     },
     "success": {},
     "warning": {
