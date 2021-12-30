@@ -42,7 +42,11 @@ module.exports = RED => {
 
       this.preBuffer = Mp4fragNode.getInt(1, 5, Mp4fragNode.preBuffer, config.preBuffer);
 
+      this.statusLocation = Mp4fragNode.getStatusLocation(config.statusLocation);
+
       this.writing = false;
+
+      this.status({});
 
       try {
         this.createPaths(); // throws
@@ -57,11 +61,15 @@ module.exports = RED => {
 
         this.on('close', this.onClose);
 
-        this.status({ fill: 'green', shape: 'ring', text: _('mp4frag.info.ready') });
-      } catch (err) {
-        this.error(err);
+        this.statusLocation.displayed && this.status({ fill: 'green', shape: 'ring', text: _('mp4frag.info.ready') });
 
-        this.status({ fill: 'red', shape: 'dot', text: err.toString() });
+        this.statusLocation.wired && this.send([null, null, { payload: { status: 'ready' } }]);
+      } catch (error) {
+        this.error(error);
+
+        this.statusLocation.displayed && this.status({ fill: 'red', shape: 'dot', text: err.toString() });
+
+        this.statusLocation.wired && this.send([null, null, { payload: { status: 'error', error } }]);
       }
     }
 
@@ -112,7 +120,11 @@ module.exports = RED => {
       });
 
       this.mp4frag.on('initialized', data => {
-        this.status({ fill: 'green', shape: 'dot', text: data.mime });
+        const { mime } = data;
+
+        this.statusLocation.displayed && this.status({ fill: 'green', shape: 'dot', text: mime });
+
+        this.statusLocation.wired && this.send([null, null, { payload: { status: 'initialized', mime } }]);
 
         const item = Mp4fragNode.basePathMap.get(this.basePath);
 
@@ -171,27 +183,32 @@ module.exports = RED => {
 
         const { totalDuration, totalByteLength } = this.mp4frag;
 
-        this.status({
-          fill: this.writing ? 'yellow' : 'green',
-          shape: 'dot',
-          text: _('mp4frag.info.segment', {
-            sequence,
-            duration: duration.toFixed(2),
-            keyframe: keyframe > -1 ? 1 : 0,
-            totalDuration: totalDuration.toFixed(2),
-            totalByteLength: (totalByteLength / 1000000).toFixed(2),
-          }),
-        });
+        this.statusLocation.displayed &&
+          this.status({
+            fill: this.writing ? 'yellow' : 'green',
+            shape: 'dot',
+            text: _('mp4frag.info.segment', {
+              sequence,
+              duration: duration.toFixed(2),
+              keyframe: keyframe > -1 ? 1 : 0,
+              totalDuration: totalDuration.toFixed(2),
+              totalByteLength: (totalByteLength / 1000000).toFixed(2),
+            }),
+          });
+
+        this.statusLocation.wired && this.send([null, null, { payload: { status: 'segment', sequence, duration, keyframe, totalDuration, totalByteLength } }]);
       });
 
-      this.mp4frag.on('error', async err => {
+      this.mp4frag.on('error', async error => {
         await this.stopWriting();
 
         this.mp4frag.resetCache();
 
-        // this.error(err);
+        // this.error(error);
 
-        this.status({ fill: 'red', shape: 'dot', text: err.toString() });
+        this.statusLocation.displayed && this.status({ fill: 'red', shape: 'dot', text: error.toString() });
+
+        this.statusLocation.wired && this.send([null, null, { payload: { status: 'error', error } }]);
       });
 
       this.mp4frag.on('reset', () => {
@@ -610,7 +627,9 @@ module.exports = RED => {
 
       this.send({ /* topic: 'set_source', */ payload: this.payload });
 
-      this.status({ fill: 'green', shape: 'ring', text: _('mp4frag.info.reset') });
+      this.statusLocation.displayed && this.status({ fill: 'green', shape: 'ring', text: _('mp4frag.info.reset') });
+
+      this.statusLocation.wired && this.send([null, null, { payload: { status: 'reset' } }]);
     }
 
     async destroy() {
@@ -637,7 +656,11 @@ module.exports = RED => {
       const { initialization } = this.mp4frag;
 
       if (initialization === null) {
-        this.status({ fill: 'yellow', shape: 'dot', text: _('mp4frag.warning.not_initialized') });
+        // todo temp set autoStart to true if called before starting
+        // this.statusLocation.displayed && this.status({ fill: 'yellow', shape: 'dot', text: _('mp4frag.warning.not_initialized') });
+
+        // this.statusLocation.wired && this.send([null, null, { payload: { status: 'warning', error} }]);
+
         return;
       }
 
@@ -814,12 +837,34 @@ module.exports = RED => {
       await this.destroy();
 
       if (removed) {
-        this.status({ fill: 'grey', shape: 'ring', text: _('mp4frag.info.removed') });
+        this.statusLocation.displayed && this.status({ fill: 'grey', shape: 'ring', text: _('mp4frag.info.removed') });
+
+        this.statusLocation.wired && this.send([null, null, { payload: { status: 'remove' } }]);
       } else {
-        this.status({ fill: 'grey', shape: 'dot', text: _('mp4frag.info.closed') });
+        this.statusLocation.displayed && this.status({ fill: 'grey', shape: 'dot', text: _('mp4frag.info.closed') });
+
+        this.statusLocation.wired && this.send([null, null, { payload: { status: 'closed' } }]);
       }
 
       done();
+    }
+
+    static getStatusLocation(location) {
+      switch (location) {
+        case 'none':
+          return {};
+
+        case 'wired':
+          return { wired: true };
+
+        case 'both':
+          return { displayed: true, wired: true };
+
+        case 'displayed':
+
+        default:
+          return { displayed: true };
+      }
     }
 
     static getInt(min, max, def, val) {

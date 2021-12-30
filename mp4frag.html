@@ -22,6 +22,9 @@
       name: {
         value: '',
       },
+      outputs: {
+        value: 2,
+      },
       /*migrate: {
         // migration versioning
         // flag for adding new defaults
@@ -78,6 +81,12 @@
           return ['true', 'false'].includes(autoStart);
         },
       },
+      statusLocation: {
+        value: 'displayed',
+        validate: function (statusLocation) {
+          return [undefined, 'displayed', 'wired', 'both', 'none'].includes(statusLocation);
+        },
+      },
     },
     icon: 'font-awesome/fa-file-video-o',
     inputLabels: 'buffer',
@@ -94,13 +103,26 @@
       }
       return this.type;
     },
-    outputLabels: ['playlist', 'buffer'],
+    outputLabels: function (index) {
+      switch (index) {
+        case 0:
+          return 'playlist';
+        case 1:
+          return 'buffer';
+        case 2:
+          return 'status';
+        default:
+          return '';
+      }
+    },
     outputs: 2, // todo editable
     oneditprepare: function () {
       const getIntFromVal = (min, max, def, val) => {
         const int = Number.parseInt(val);
 
-        if (Number.isNaN(int)) {
+        return Number.isNaN(int) ? [def, true] : int < min ? [min, true] : int > max ? [max, true] : [int, false];
+
+        /*if (Number.isNaN(int)) {
           return [def, true];
         } else if (int < min) {
           return [min, true];
@@ -108,7 +130,7 @@
           return [max, true];
         } else {
           return [int, false];
-        }
+        }*/
       };
 
       const basePath = $('#node-input-basePath');
@@ -203,6 +225,16 @@
         ],
       });
 
+      const statusLocation = $('#node-input-statusLocation').typedInput({
+        types: [
+          {
+            value: 'str',
+            //icon: 'fa fa-list-ol',
+            options: ['displayed', 'wired', 'both', 'none'],
+          },
+        ],
+      });
+
       // migration code start
       /*if (typeof this.migrate === 'undefined' || this.migrate < this._def.defaults.migrate.value) {
         this.migrate = this._def.defaults.migrate.value;
@@ -221,7 +253,15 @@
         })
         .appendTo($('div.red-ui-tray-footer'));
     },
-    oneditsave: function () {},
+    oneditsave: function () {
+      const statusLocation = $('#node-input-statusLocation').typedInput('value');
+
+      if (['wired', 'both'].includes(statusLocation)) {
+        this.outputs = 3;
+      } else {
+        this.outputs = 2;
+      }
+    },
   });
 </script>
 
@@ -295,6 +335,17 @@
     <div class="form-row">
       <label for="node-input-repeated"><i class="fa fa-gears"></i> Repeated</label>
       <input id="node-input-repeated" />
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Status Output</legend>
+
+    <p class="form-tips">Status can be displayed, sent to wired output, both, or none.</p>
+
+    <div class="form-row">
+      <label for="node-input-statusLocation"><i class="fa fa-gears"></i> Location</label>
+      <input id="node-input-statusLocation" />
     </div>
   </fieldset>
 </script>
