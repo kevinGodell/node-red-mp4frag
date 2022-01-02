@@ -134,9 +134,11 @@ module.exports = RED => {
       this.mp4frag.on('initialized', data => {
         const { mime } = data;
 
+        const { videoCodec } = this.mp4frag;
+
         this.statusLocation.displayed && this.status({ fill: 'green', shape: 'dot', text: mime });
 
-        this.statusLocation.wired && this.send([null, null, { payload: { status: 'initialized', mime } }]);
+        this.statusLocation.wired && this.send([null, null, { payload: { status: 'initialized', mime, videoCodec } }]);
 
         const item = Mp4fragNode.basePathMap.get(this.basePath);
 
@@ -980,6 +982,8 @@ Mp4Frag.prototype.toJSON = function () {
     audioCodec: this.audioCodec,
     mime: this.mime,
     m3u8: this.m3u8,
+    totalDuration: this.totalDuration,
+    totalByteLength: this.totalByteLength,
     segmentObject: this.segmentObject,
     segmentObjects: this.segmentObjects,
   };
