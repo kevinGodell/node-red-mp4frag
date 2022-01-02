@@ -185,7 +185,7 @@ module.exports = RED => {
             if (res.writableEnded === false || res.finished === false) {
               res.write(segment);
 
-              res.flush();
+              // res.flush();
             }
           });
         }
@@ -535,7 +535,7 @@ module.exports = RED => {
                 });
               }
 
-              res.flush();
+              // res.flush();
 
               this.resWaitingForSegments.add(res);
 
