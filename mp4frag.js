@@ -1,6 +1,12 @@
 'use strict';
 
-const Io = require('socket.io');
+const Io = (() => {
+  try {
+    return require('socket.io');
+  } catch (error) {
+    return false;
+  }
+})();
 
 const { Router } = require('express');
 
@@ -43,6 +49,10 @@ module.exports = RED => {
       this.preBuffer = Mp4fragNode.getInt(1, 5, Mp4fragNode.preBuffer, config.preBuffer);
 
       this.statusLocation = Mp4fragNode.getStatusLocation(config.statusLocation);
+
+      this.serveHttp = config.serveHttp !== 'false'; // todo future config
+
+      this.serveIo = Io && config.serveIo !== 'false'; // todo future config
 
       this.writing = false;
 
@@ -109,6 +119,8 @@ module.exports = RED => {
       this.mp4VideoPath = undefined;
 
       this.ioNamespace = undefined;
+
+      this.topic = undefined;
     }
 
     createMp4frag() {
@@ -138,7 +150,7 @@ module.exports = RED => {
           this.payload = {
             hlsPlaylist: this.hlsPlaylistPath,
             mp4Video: this.mp4VideoPath,
-            socketIo: { path: Mp4fragNode.ioPath, namespace: this.ioNamespace, key: this.ioKey },
+            socketIo: this.socketIoClient,
           };
 
           this.send({ payload: this.payload });
@@ -153,7 +165,8 @@ module.exports = RED => {
           return;
         }*/
 
-        if (this.ioSocketWaitingForSegments.size > 0) {
+        // todo move to its own mp4frag 'segment' listener in createIoServer()
+        if (this.ioSocketWaitingForSegments && this.ioSocketWaitingForSegments.size > 0) {
           this.ioSocketWaitingForSegments.forEach((all, socket, map) => {
             if (socket.connected === true) {
               socket.emit('segment', data);
@@ -181,6 +194,8 @@ module.exports = RED => {
           this.mp4fragWriter(segment, sequence, duration, timestamp);
         }
 
+        const { byteLength } = segment;
+
         const { totalDuration, totalByteLength } = this.mp4frag;
 
         this.statusLocation.displayed &&
@@ -196,7 +211,8 @@ module.exports = RED => {
             }),
           });
 
-        this.statusLocation.wired && this.send([null, null, { payload: { status: 'segment', sequence, duration, keyframe, totalDuration, totalByteLength } }]);
+        this.statusLocation.wired &&
+          this.send([null, null, { payload: { status: 'segment', sequence, duration, byteLength, keyframe, totalDuration, totalByteLength } }]);
       });
 
       this.mp4frag.on('error', async error => {
@@ -241,175 +257,183 @@ module.exports = RED => {
     }
 
     createIoServer() {
-      if (typeof Mp4fragNode.ioServer === 'undefined') {
-        Mp4fragNode.ioServer = Io(server, {
-          path: Mp4fragNode.ioPath,
-          transports: ['websocket' /* , 'polling'*/],
-        });
-      }
-
-      this.ioKey = randomBytes(15).toString('hex');
-
-      this.ioSocketWaitingForSegments = new Map();
-
-      this.ioServerOfNamespace = Mp4fragNode.ioServer.of(this.ioNamespace);
-
-      if (typeof Mp4fragNode.ioMiddleware === 'function') {
-        this.ioServerOfNamespace.use(Mp4fragNode.ioMiddleware);
-      } else if (Array.isArray(Mp4fragNode.ioMiddleware)) {
-        Mp4fragNode.ioMiddleware.forEach(middleware => {
-          this.ioServerOfNamespace.use(middleware);
-        });
-      } else {
-        this.ioServerOfNamespace.use((socket, next) => {
-          if (typeof socket.handshake.auth === 'object') {
-            if (this.ioKey !== socket.handshake.auth.key) {
-              const err = new Error('not authorized');
-
-              err.data = { reason: 'auth key invalid' };
-
-              return setTimeout(() => {
-                next(err);
-              }, 5000);
-            }
-
-            socket.authenticated = true;
-          } else {
-            socket.authenticated = false;
-          }
-
-          next();
-        });
-      }
-
-      this.ioServerOfNamespace.on('connect' /* or connection */, socket => {
-        // might send ack to verify round trip
-
-        // connect -> auth -> mime -> initialization -> segments...
-
-        const onAuthenticated = () => {
-          socket.on('mime', () => {
-            if (typeof this.mp4frag === 'undefined') {
-              return socket.emit('mp4frag_error', _('mp4frag.error.mp4frag_not_found', { basePath: this.basePath }));
-            }
-
-            const { mime } = this.mp4frag;
-
-            if (mime === null) {
-              return socket.emit('mp4frag_error', _('mp4frag.error.mime_not_found', { basePath: this.basePath }));
-            }
-
-            socket.emit('mime', mime);
+      if (this.serveIo) {
+        if (typeof Mp4fragNode.ioServer === 'undefined') {
+          Mp4fragNode.ioServer = Io(server, {
+            path: Mp4fragNode.ioPath,
+            transports: ['websocket' /* , 'polling'*/],
           });
+        }
 
-          socket.on('initialization', () => {
-            if (typeof this.mp4frag === 'undefined') {
-              return socket.emit('mp4frag_error', _('mp4frag.error.mp4frag_not_found', { basePath: this.basePath }));
-            }
+        this.ioKey = randomBytes(15).toString('hex');
 
-            const { initialization } = this.mp4frag;
+        this.socketIoClient = { path: Mp4fragNode.ioPath, namespace: this.ioNamespace, key: this.ioKey };
 
-            if (initialization === null) {
-              return socket.emit('mp4frag_error', _('mp4frag.error.initialization_not_found', { basePath: this.basePath }));
-            }
+        this.ioSocketWaitingForSegments = new Map();
 
-            socket.emit('initialization', initialization);
+        this.ioServerOfNamespace = Mp4fragNode.ioServer.of(this.ioNamespace);
+
+        if (typeof Mp4fragNode.ioMiddleware === 'function') {
+          this.ioServerOfNamespace.use(Mp4fragNode.ioMiddleware);
+        } else if (Array.isArray(Mp4fragNode.ioMiddleware)) {
+          Mp4fragNode.ioMiddleware.forEach(middleware => {
+            this.ioServerOfNamespace.use(middleware);
           });
+        } else {
+          this.ioServerOfNamespace.use((socket, next) => {
+            if (typeof socket.handshake.auth === 'object') {
+              if (this.ioKey !== socket.handshake.auth.key) {
+                const err = new Error('not authorized');
 
-          socket.on('segment', (data = {}) => {
-            if (typeof this.mp4frag === 'undefined') {
-              return socket.emit('mp4frag_error', _('mp4frag.error.mp4frag_not_found', { basePath: this.basePath }));
-            }
+                err.data = { reason: 'auth key invalid' };
 
-            if (typeof data.timestamp === 'number') {
-              const { segmentObject } = this.mp4frag;
-
-              if (segmentObject.timestamp > data.timestamp) {
-                socket.emit('segment', segmentObject);
-              } else {
-                this.ioSocketWaitingForSegments.set(socket, false);
+                return setTimeout(() => {
+                  next(err);
+                }, 5000);
               }
+
+              socket.authenticated = true;
             } else {
-              // const startIndex = data.buffered === true ? 0 : -1;
+              socket.authenticated = false;
+            }
 
-              const lastIndex = this.mp4frag.getSegmentObjectLastIndex(1);
+            next();
+          });
+        }
 
-              if (lastIndex > -1) {
-                const { segmentObjects, sequence, timestamp } = this.mp4frag;
+        this.ioServerOfNamespace.on('connect' /* or connection */, socket => {
+          // might send ack to verify round trip
 
-                let duration = 0;
+          // connect -> auth -> mime -> initialization -> segments...
 
-                const segments = [];
+          const onAuthenticated = () => {
+            socket.on('mime', () => {
+              if (typeof this.mp4frag === 'undefined') {
+                return socket.emit('mp4frag_error', _('mp4frag.error.mp4frag_not_found', { basePath: this.basePath }));
+              }
 
-                segmentObjects.slice(lastIndex).forEach(segmentObject => {
-                  segments.push(segmentObject.segment);
+              const { mime } = this.mp4frag;
 
-                  duration += segmentObject.duration;
-                });
+              if (mime === null) {
+                return socket.emit('mp4frag_error', _('mp4frag.error.mime_not_found', { basePath: this.basePath }));
+              }
 
-                const segment = segments.length === 1 ? segments[0] : Buffer.concat(segments);
+              socket.emit('mime', mime);
+            });
 
-                socket.emit('segment', { segment, duration, timestamp, sequence });
+            socket.on('initialization', () => {
+              if (typeof this.mp4frag === 'undefined') {
+                return socket.emit('mp4frag_error', _('mp4frag.error.mp4frag_not_found', { basePath: this.basePath }));
+              }
 
-                if (data.all !== false) {
-                  this.ioSocketWaitingForSegments.set(socket, true);
+              const { initialization } = this.mp4frag;
+
+              if (initialization === null) {
+                return socket.emit('mp4frag_error', _('mp4frag.error.initialization_not_found', { basePath: this.basePath }));
+              }
+
+              socket.emit('initialization', initialization);
+            });
+
+            socket.on('segment', (data = {}) => {
+              if (typeof this.mp4frag === 'undefined') {
+                return socket.emit('mp4frag_error', _('mp4frag.error.mp4frag_not_found', { basePath: this.basePath }));
+              }
+
+              if (typeof data.timestamp === 'number') {
+                const { segmentObject } = this.mp4frag;
+
+                if (segmentObject.timestamp > data.timestamp) {
+                  socket.emit('segment', segmentObject);
+                } else {
+                  this.ioSocketWaitingForSegments.set(socket, false);
                 }
               } else {
-                this.ioSocketWaitingForSegments.set(socket, data.all !== false);
+                // const startIndex = data.buffered === true ? 0 : -1;
+
+                const lastIndex = this.mp4frag.getSegmentObjectLastIndex(1);
+
+                if (lastIndex > -1) {
+                  const { segmentObjects, sequence, timestamp } = this.mp4frag;
+
+                  let duration = 0;
+
+                  const segments = [];
+
+                  segmentObjects.slice(lastIndex).forEach(segmentObject => {
+                    segments.push(segmentObject.segment);
+
+                    duration += segmentObject.duration;
+                  });
+
+                  const segment = segments.length === 1 ? segments[0] : Buffer.concat(segments);
+
+                  socket.emit('segment', { segment, duration, timestamp, sequence });
+
+                  if (data.all !== false) {
+                    this.ioSocketWaitingForSegments.set(socket, true);
+                  }
+                } else {
+                  this.ioSocketWaitingForSegments.set(socket, data.all !== false);
+                }
               }
-            }
-          });
+            });
 
-          socket.on('disconnect', data => {
-            this.ioSocketWaitingForSegments instanceof Map && this.ioSocketWaitingForSegments.delete(socket);
-          });
+            socket.on('disconnect', data => {
+              this.ioSocketWaitingForSegments instanceof Map && this.ioSocketWaitingForSegments.delete(socket);
+            });
 
-          socket.emit('auth', true);
-        };
+            socket.emit('auth', true);
+          };
 
-        if (socket.authenticated === true) {
-          onAuthenticated();
-        } else {
-          // todo add timer waiting for auth response from client
+          if (socket.authenticated === true) {
+            onAuthenticated();
+          } else {
+            // todo add timer waiting for auth response from client
 
-          socket.once('auth', (data = {}) => {
-            const { key } = data;
+            socket.once('auth', (data = {}) => {
+              const { key } = data;
 
-            if (this.ioKey === key) {
-              onAuthenticated();
-            } else {
-              setTimeout(() => socket.disconnect(true), 5000);
-            }
-          });
+              if (this.ioKey === key) {
+                onAuthenticated();
+              } else {
+                setTimeout(() => socket.disconnect(true), 5000);
+              }
+            });
 
-          socket.emit('auth', false);
-        }
-      });
+            socket.emit('auth', false);
+          }
+        });
+      }
     }
 
     destroyIoServer() {
-      const sockets = this.ioServerOfNamespace.sockets instanceof Map ? this.ioServerOfNamespace.sockets : Object.values(this.ioServerOfNamespace.sockets);
+      if (this.serveIo) {
+        const sockets = this.ioServerOfNamespace.sockets instanceof Map ? this.ioServerOfNamespace.sockets : Object.values(this.ioServerOfNamespace.sockets);
 
-      sockets.forEach(socket => {
-        if (socket.connected === true) {
-          socket.disconnect(true);
+        sockets.forEach(socket => {
+          if (socket.connected === true) {
+            socket.disconnect(true);
+          }
+        });
+
+        this.ioServerOfNamespace.removeAllListeners();
+
+        this.ioServerOfNamespace = undefined;
+
+        this.ioSocketWaitingForSegments.clear();
+
+        this.ioSocketWaitingForSegments = undefined;
+
+        this.ioKey = undefined;
+
+        this.socketIoClient = undefined;
+
+        if (Mp4fragNode.ioServer._nsps instanceof Map) {
+          Mp4fragNode.ioServer._nsps.delete(this.ioNamespace);
+        } else {
+          Mp4fragNode.ioServer.nsps[this.ioNamespace] = undefined;
         }
-      });
-
-      this.ioServerOfNamespace.removeAllListeners();
-
-      this.ioServerOfNamespace = undefined;
-
-      this.ioSocketWaitingForSegments.clear();
-
-      this.ioSocketWaitingForSegments = undefined;
-
-      this.ioKey = undefined;
-
-      if (Mp4fragNode.ioServer._nsps instanceof Map) {
-        Mp4fragNode.ioServer._nsps.delete(this.ioNamespace);
-      } else {
-        Mp4fragNode.ioServer.nsps[this.ioNamespace] = undefined;
       }
     }
 
@@ -870,15 +894,7 @@ module.exports = RED => {
     static getInt(min, max, def, val) {
       const int = Number.parseInt(val);
 
-      if (Number.isNaN(int)) {
-        return def;
-      } else if (int < min) {
-        return min;
-      } else if (int > max) {
-        return max;
-      } else {
-        return int;
-      }
+      return Number.isNaN(int) ? def : int < min ? min : int > max ? max : int;
     }
 
     static getFilenameFunc(filenameFunc) {
