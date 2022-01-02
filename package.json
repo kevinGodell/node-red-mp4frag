@@ -1,6 +1,6 @@
 {
   "name": "node-red-contrib-mp4frag",
-  "version": "0.1.0-beta.13",
+  "version": "0.1.0-beta.14",
   "description": "Parse a fragmented mp4 from a buffer and send it to another node or serve it via socket.io and http.",
   "main": "mp4frag.js",
   "scripts": {
@@ -38,11 +38,9 @@
     "prettier": "^2.5.1"
   },
   "optionalDependencies": {
-    "bufferutil": "^4.0.3",
-    "utf-8-validate": "^5.0.4"
-  },
-  "peerDependencies": {
-    "socket.io": ">=2"
+    "bufferutil": "^4.0.6",
+    "socket.io": ">=2",
+    "utf-8-validate": "^5.0.8"
   },
   "dependencies": {
     "express": "4",
