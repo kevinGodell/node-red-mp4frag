@@ -37,10 +37,21 @@
     "eslint-plugin-prettier": "^3.4.1",
     "prettier": "^2.5.1"
   },
-  "optionalDependencies": {
+  "peerDependencies": {
     "bufferutil": "^4.0.6",
     "socket.io": ">=2",
     "utf-8-validate": "^5.0.8"
+  },
+  "peerDependenciesMeta": {
+    "bufferutil": {
+      "optional": true
+    },
+    "socket.io": {
+      "optional": true
+    },
+    "utf-8-validate": {
+      "optional": true
+    }
   },
   "dependencies": {
     "express": "4",
