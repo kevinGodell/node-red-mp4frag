@@ -121,16 +121,6 @@
         const int = Number.parseInt(val);
 
         return Number.isNaN(int) ? [def, true] : int < min ? [min, true] : int > max ? [max, true] : [int, false];
-
-        /*if (Number.isNaN(int)) {
-          return [def, true];
-        } else if (int < min) {
-          return [min, true];
-        } else if (int > max) {
-          return [max, true];
-        } else {
-          return [int, false];
-        }*/
       };
 
       const basePath = $('#node-input-basePath');
