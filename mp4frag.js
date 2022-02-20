@@ -134,11 +134,11 @@ module.exports = RED => {
       this.mp4frag.on('initialized', data => {
         const { mime } = data;
 
-        const { videoCodec } = this.mp4frag;
+        const { videoCodec, audioCodec } = this.mp4frag;
 
         this.statusLocation.displayed && this.status({ fill: 'green', shape: 'dot', text: mime });
 
-        this.statusLocation.wired && this.send([null, null, { payload: { status: 'initialized', mime, videoCodec } }]);
+        this.statusLocation.wired && this.send([null, null, { payload: { status: 'initialized', mime, videoCodec, audioCodec } }]);
 
         const item = Mp4fragNode.basePathMap.get(this.basePath);
 
@@ -207,7 +207,7 @@ module.exports = RED => {
             text: _('mp4frag.info.segment', {
               sequence,
               duration: duration.toFixed(2),
-              keyframe: keyframe > -1 ? 1 : 0,
+              keyframe: keyframe ? 1 : 0,
               totalDuration: totalDuration.toFixed(2),
               totalByteLength: (totalByteLength / 1000000).toFixed(2),
             }),
@@ -978,6 +978,7 @@ Mp4Frag.prototype.toJSON = function () {
     hlsPlaylistExtra: this._hlsPlaylistExtra,
     segmentCount: this._segmentCount,
     initialization: this.initialization,
+    allKeyframes: this.allKeyframes,
     videoCodec: this.videoCodec,
     audioCodec: this.audioCodec,
     mime: this.mime,
@@ -996,7 +997,7 @@ Mp4Frag.prototype.getSegmentObjectLastIndex = function (limit) {
     let count = 0;
 
     for (let i = this._segmentObjects.length - 1; i >= 0 && count < limit; --i) {
-      if (this._allKeyframes || this._segmentObjects[i].keyframe > -1) {
+      if (this._allKeyframes || this._segmentObjects[i].keyframe) {
         lastIndex = i;
 
         ++count;
