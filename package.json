@@ -8,7 +8,8 @@
     "pack": "npm pack",
     "pretty": "prettier --write **/*.html",
     "lint": "eslint --fix --ext .js --ignore-path .gitignore .",
-    "clean": "npm run lint && npm run pretty"
+    "clean": "npm run lint && npm run pretty",
+    "beta": "npm version prerelease --preid=beta"
   },
   "repository": {
     "type": "git",
@@ -32,14 +33,14 @@
   },
   "homepage": "https://github.com/kevinGodell/node-red-contrib-mp4frag#readme",
   "devDependencies": {
-    "eslint": "^7.32.0",
+    "eslint": "^8.26.0",
     "eslint-config-prettier": "^8.3.0",
-    "eslint-plugin-prettier": "^3.4.1",
-    "prettier": "^2.5.1"
+    "eslint-plugin-prettier": "^4.2.1",
+    "prettier": "^2.7.1"
   },
   "optionalDependencies": {
-    "bufferutil": "^4.0.6",
-    "utf-8-validate": "^5.0.8"
+    "bufferutil": "^4.0.7",
+    "utf-8-validate": "^5.0.10"
   },
   "peerDependencies": {
     "socket.io": ">=2"
