@@ -158,7 +158,7 @@ module.exports = RED => {
           this.send({ payload: this.payload });
 
           if (this.autoStart === true) {
-            this.startWriting(this.preBuffer, this.timeLimit, this.repeated);
+            this.startWriting(0, this.timeLimit, this.repeated);
           }
         }
 
@@ -694,7 +694,7 @@ module.exports = RED => {
 
       timeLimit = Mp4fragNode.getInt(-1, Number.MAX_SAFE_INTEGER, this.timeLimit, timeLimit);
 
-      preBuffer = Mp4fragNode.getInt(1, 5, this.preBuffer, preBuffer);
+      preBuffer = Mp4fragNode.getInt(0, 5, this.preBuffer, preBuffer);
 
       const writeMode = timeLimit === -1 ? 'unlimited' : repeated ? 'continuous' : 'single';
 
@@ -709,28 +709,22 @@ module.exports = RED => {
 
       this.send([null, { topic: this.topic.buffer.init, retain: true, writeMode, payload: initialization, filename, action: { command: 'start' } }]);
 
-      const lastIndex = this.mp4frag.getSegmentObjectLastIndex(preBuffer);
+      if (preBuffer > 0) {
+        const lastIndex = this.mp4frag.getSegmentObjectLastIndex(preBuffer);
 
-      if (lastIndex > -1) {
-        const { segmentObjects, sequence, timestamp } = this.mp4frag;
+        if (lastIndex > -1) {
+          const { segmentObjects } = this.mp4frag;
 
-        let duration = 0;
+          const topic = this.topic.buffer.pre;
 
-        const segments = [];
+          const retain = false;
 
-        segmentObjects.slice(lastIndex).forEach(segmentObject => {
-          segments.push(segmentObject.segment);
+          segmentObjects.slice(lastIndex).forEach(segmentObject => {
+            const { segment: payload, duration, timestamp, sequence } = segmentObject;
 
-          duration += segmentObject.duration;
-        });
-
-        const topic = this.topic.buffer.pre;
-
-        const retain = false;
-
-        const payload = segments.length === 1 ? segments[0] : Buffer.concat(segments);
-
-        this.send([null, { topic, retain, writeMode, payload, filename, duration, timestamp, sequence }]);
+            this.send([null, { topic, retain, writeMode, payload, filename, duration, timestamp, sequence }]);
+          });
+        }
       }
 
       const topic = this.topic.buffer.seg;
