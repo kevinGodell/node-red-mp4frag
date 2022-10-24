@@ -25,6 +25,7 @@ module.exports = RED => {
     httpNode,
     server,
     settings,
+    settings: { httpNodeRoot },
     _,
     nodes: { createNode, registerType },
     log: { error },
@@ -96,9 +97,9 @@ module.exports = RED => {
 
       Mp4fragNode.basePathMap.set(this.basePath, { id: this.id, running: false });
 
-      this.hlsPlaylistPath = `/mp4frag/${this.basePath}/hls.m3u8`;
+      this.hlsPlaylistPath = `${httpNodeRoot}mp4frag/${this.basePath}/hls.m3u8`;
 
-      this.mp4VideoPath = `/mp4frag/${this.basePath}/video.mp4`;
+      this.mp4VideoPath = `${httpNodeRoot}mp4frag/${this.basePath}/video.mp4`;
 
       this.ioNamespace = `/${this.basePath}`;
 
@@ -261,6 +262,7 @@ module.exports = RED => {
     createIoServer() {
       if (this.serveIo) {
         if (typeof Mp4fragNode.ioServer === 'undefined') {
+          Mp4fragNode.ioPath = `${httpNodeRoot}mp4frag/socket.io`;
           Mp4fragNode.ioServer = Io(server, {
             path: Mp4fragNode.ioPath,
             transports: ['websocket' /* , 'polling'*/],
@@ -927,7 +929,7 @@ module.exports = RED => {
 
   Mp4fragNode.basePathMap = new Map();
 
-  Mp4fragNode.ioPath = '/mp4frag/socket.io';
+  Mp4fragNode.ioPath = undefined;
 
   Mp4fragNode.ioServer = undefined;
 
