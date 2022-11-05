@@ -47,7 +47,7 @@ module.exports = RED => {
 
       this.timeLimit = Mp4fragNode.getInt(-1, Number.MAX_SAFE_INTEGER, Mp4fragNode.timeLimit, config.timeLimit);
 
-      this.preBuffer = Mp4fragNode.getInt(1, 5, Mp4fragNode.preBuffer, config.preBuffer);
+      this.preBuffer = Mp4fragNode.getInt(0, 5, Mp4fragNode.preBuffer, config.preBuffer);
 
       this.statusLocation = Mp4fragNode.getStatusLocation(config.statusLocation);
 
@@ -524,19 +524,18 @@ module.exports = RED => {
 
               res.write(initialization);
 
-              const preBuffer = (val => {
-                val = parseInt(val);
-                return isNaN(val) || val < 1 ? 1 : val > 10 ? 10 : val;
-              })(req.query.preBuffer);
+              const preBuffer = Mp4fragNode.getInt(0, 5, 1, req.query.preBuffer);
 
-              const lastIndex = this.mp4frag.getSegmentObjectLastIndex(preBuffer);
+              if (preBuffer > 0) {
+                const lastIndex = this.mp4frag.getSegmentObjectLastIndex(preBuffer);
 
-              if (lastIndex > -1) {
-                const { segmentObjects } = this.mp4frag;
+                if (lastIndex > -1) {
+                  const { segmentObjects } = this.mp4frag;
 
-                segmentObjects.slice(lastIndex).forEach(segmentObject => {
-                  res.write(segmentObject.segment);
-                });
+                  segmentObjects.slice(lastIndex).forEach(segmentObject => {
+                    res.write(segmentObject.segment);
+                  });
+                }
               }
 
               // res.flush();
@@ -681,7 +680,7 @@ module.exports = RED => {
     }
 
     startWriting(preBuffer, timeLimit, repeated) {
-      const { initialization } = this.mp4frag;
+      const { initialization, duration } = this.mp4frag;
 
       if (initialization === null) {
         // todo temp set autoStart to true if called before starting
@@ -709,7 +708,7 @@ module.exports = RED => {
 
       const filename = Mp4fragNode.filenameFunc({ basePath: this.basePath });
 
-      this.send([null, { topic: this.topic.buffer.init, retain: true, writeMode, payload: initialization, filename, action: { command: 'start' } }]);
+      this.send([null, { topic: this.topic.buffer.init, retain: true, writeMode, payload: initialization, filename, action: { command: 'start' }, duration }]);
 
       if (preBuffer > 0) {
         const lastIndex = this.mp4frag.getSegmentObjectLastIndex(preBuffer);
@@ -919,7 +918,7 @@ module.exports = RED => {
 
   mp4frag.timeLimit = Mp4fragNode.getInt(-1, Number.MAX_SAFE_INTEGER, 10000, mp4frag.timeLimit);
 
-  mp4frag.preBuffer = Mp4fragNode.getInt(1, 5, 1, mp4frag.preBuffer);
+  mp4frag.preBuffer = Mp4fragNode.getInt(0, 5, 1, mp4frag.preBuffer);
 
   mp4frag.filenameFunc = Mp4fragNode.getFilenameFunc(mp4frag.filenameFunc);
 
