@@ -14,10 +14,6 @@ const { randomBytes } = require('crypto');
 
 const Mp4Frag = require('mp4frag');
 
-const { promisify } = require('util');
-
-const sleep = promisify(setTimeout);
-
 const { name: packageName, version: packageVersion } = require('./package.json');
 
 module.exports = RED => {
@@ -218,8 +214,8 @@ module.exports = RED => {
           this.send([null, null, { payload: { status: 'segment', sequence, duration, byteLength, keyframe, totalDuration, totalByteLength } }]);
       });
 
-      this.mp4frag.on('error', async error => {
-        await this.stopWriting();
+      this.mp4frag.on('error', error => {
+        this.stopWriting();
 
         this.mp4frag.resetCache();
 
@@ -645,8 +641,8 @@ module.exports = RED => {
       }
     }
 
-    async reset() {
-      await this.stopWriting();
+    reset() {
+      this.stopWriting();
 
       this.mp4frag.resetCache();
 
@@ -659,12 +655,12 @@ module.exports = RED => {
       this.statusLocation.wired && this.send([null, null, { payload: { status: 'reset' } }]);
     }
 
-    async destroy() {
+    destroy() {
       this.removeListener('input', this.onInput);
 
       this.removeListener('close', this.onClose);
 
-      await this.stopWriting();
+      this.stopWriting();
 
       this.destroyHttpRoute();
 
@@ -745,11 +741,11 @@ module.exports = RED => {
           {
             this.endTime = Date.now() + timeLimit;
 
-            this.mp4fragWriter = async (segment, sequence, duration, timestamp) => {
+            this.mp4fragWriter = (segment, sequence, duration, timestamp) => {
               this.send([null, { topic, retain, writeMode, payload: segment, filename, sequence, duration, timestamp }]);
 
               if (Date.now() >= this.endTime) {
-                await this.stopWriting();
+                this.stopWriting();
               }
             };
           }
@@ -759,11 +755,11 @@ module.exports = RED => {
           {
             const endTime = Date.now() + timeLimit;
 
-            this.mp4fragWriter = async (segment, sequence, duration, timestamp) => {
+            this.mp4fragWriter = (segment, sequence, duration, timestamp) => {
               this.send([null, { topic, retain, writeMode, payload: segment, filename, sequence, duration, timestamp }]);
 
               if (Date.now() >= endTime) {
-                await this.stopWriting();
+                this.stopWriting();
 
                 this.startWriting(preBuffer, timeLimit, repeated);
               }
@@ -779,7 +775,7 @@ module.exports = RED => {
       this.filename = filename;
     }
 
-    async stopWriting() {
+    stopWriting() {
       if (this.writing !== true) {
         return;
       }
@@ -794,16 +790,12 @@ module.exports = RED => {
 
       this.endTime = undefined;
 
-      await sleep(200);
-
       this.send([null, { topic: this.topic.buffer.init, retain: true, payload: Buffer.allocUnsafe(0), filename }]);
-
-      await sleep(100);
 
       this.writing = false;
     }
 
-    async onInput(msg) {
+    onInput(msg) {
       const { payload, action } = msg;
 
       if (Buffer.isBuffer(payload)) {
@@ -812,7 +804,7 @@ module.exports = RED => {
         } else {
           // zero length buffer
 
-          await this.reset();
+          this.reset();
         }
 
         return;
@@ -829,7 +821,7 @@ module.exports = RED => {
               break;
 
             case 'restart':
-              await this.stopWriting();
+              this.stopWriting();
 
               this.startWriting(preBuffer, timeLimit, repeated);
 
@@ -837,7 +829,7 @@ module.exports = RED => {
             case 'stop':
 
             default:
-              await this.stopWriting();
+              this.stopWriting();
           }
         }
 
@@ -848,14 +840,14 @@ module.exports = RED => {
 
       // current method for resetting cache, grab exit code or signal from exec
       if (typeof code !== 'undefined' || typeof signal !== 'undefined') {
-        await this.reset();
+        this.reset();
 
         return;
       }
     }
 
-    async onClose(removed, done) {
-      await this.destroy();
+    onClose(removed, done) {
+      this.destroy();
 
       if (removed) {
         this.statusLocation.displayed && this.status({ fill: 'grey', shape: 'ring', text: _('mp4frag.info.removed') });
