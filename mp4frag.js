@@ -93,11 +93,11 @@ module.exports = RED => {
 
       Mp4fragNode.basePathMap.set(this.basePath, { id: this.id, running: false });
 
-      this.hlsPlaylistPath = `${httpNodeRoot}mp4frag/${this.basePath}/hls.m3u8`;
+      // this.hlsPlaylistPath = this.serveHttp && `${httpNodeRoot}mp4frag/${this.basePath}/hls.m3u8` || undefined;
 
-      this.mp4VideoPath = `${httpNodeRoot}mp4frag/${this.basePath}/video.mp4`;
+      // this.mp4VideoPath = this.serveHttp && `${httpNodeRoot}mp4frag/${this.basePath}/video.mp4` || undefined;
 
-      this.ioNamespace = `/${this.basePath}`;
+      // this.ioNamespace = `/${this.basePath}`;
 
       this.topic = {
         buffer: {
@@ -111,11 +111,11 @@ module.exports = RED => {
     destroyPaths() {
       Mp4fragNode.basePathMap.delete(this.basePath);
 
-      this.hlsPlaylistPath = undefined;
+      // this.hlsPlaylistPath = undefined;
 
-      this.mp4VideoPath = undefined;
+      // this.mp4VideoPath = undefined;
 
-      this.ioNamespace = undefined;
+      // this.ioNamespace = undefined;
 
       this.topic = undefined;
     }
@@ -179,7 +179,7 @@ module.exports = RED => {
           });
         }
 
-        if (this.resWaitingForSegments.size > 0) {
+        if (this.resWaitingForSegments && this.resWaitingForSegments.size > 0) {
           this.resWaitingForSegments.forEach(res => {
             if (res.writableEnded === false || res.finished === false) {
               res.write(segment);
@@ -227,7 +227,7 @@ module.exports = RED => {
       });
 
       this.mp4frag.on('reset', () => {
-        if (this.resWaitingForSegments.size > 0) {
+        if (this.resWaitingForSegments && this.resWaitingForSegments.size > 0) {
           this.resWaitingForSegments.forEach(res => {
             if (res.writableEnded === false || res.finished === false) {
               res.end();
@@ -264,6 +264,8 @@ module.exports = RED => {
             transports: ['websocket' /* , 'polling'*/],
           });
         }
+
+        this.ioNamespace = `/${this.basePath}`;
 
         this.ioKey = randomBytes(15).toString('hex');
 
@@ -434,41 +436,44 @@ module.exports = RED => {
         } else {
           Mp4fragNode.ioServer.nsps[this.ioNamespace] = undefined;
         }
+
+        this.ioNamespace = undefined;
       }
     }
 
     createHttpRoute() {
-      if (typeof Mp4fragNode.httpRouter === 'undefined') {
-        Mp4fragNode.httpRouter = Router({ caseSensitive: true });
+      if (this.serveHttp) {
+        if (typeof Mp4fragNode.httpRouter === 'undefined') {
+          Mp4fragNode.httpRouter = Router({ caseSensitive: true });
 
-        Mp4fragNode.httpRouter.mp4fragRouter = true;
+          Mp4fragNode.httpRouter.mp4fragRouter = true;
 
-        Mp4fragNode.httpRouter.use((req, res, next) => {
-          res.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+          Mp4fragNode.httpRouter.use((req, res, next) => {
+            res.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
 
-          res.set('Expires', '-1');
+            res.set('Expires', '-1');
 
-          res.set('Pragma', 'no-cache');
+            res.set('Pragma', 'no-cache');
 
-          // overwrite X-Powered-By Express header
-          res.set('X-Powered-By', `${packageName} ${packageVersion}`);
+            // overwrite X-Powered-By Express header
+            res.set('X-Powered-By', `${packageName} ${packageVersion}`);
 
-          // note: X-Powered-By can be only removed from Router in middleware calling res.removeHeader('X-Powered-By');
+            // note: X-Powered-By can be only removed from Router in middleware calling res.removeHeader('X-Powered-By');
 
-          next();
-        });
+            next();
+          });
 
-        if (Mp4fragNode.httpMiddleware !== null) {
-          Mp4fragNode.httpRouter.use(Mp4fragNode.httpMiddleware);
-        }
+          if (Mp4fragNode.httpMiddleware !== null) {
+            Mp4fragNode.httpRouter.use(Mp4fragNode.httpMiddleware);
+          }
 
-        Mp4fragNode.httpRouter.get('/', (req, res) => {
-          let basePathArray = Array.from(Mp4fragNode.basePathMap);
+          Mp4fragNode.httpRouter.get('/', (req, res) => {
+            let basePathArray = Array.from(Mp4fragNode.basePathMap);
 
-          res.type('json').send(JSON.stringify(basePathArray, null, 2));
+            res.type('json').send(JSON.stringify(basePathArray, null, 2));
 
-          // todo filter response based on user level/access
-          /* const { access } = res.locals;
+            // todo filter response based on user level/access
+            /* const { access } = res.locals;
 
           if (Array.isArray(access) === false || access.length === 0 || access.includes('all')) {
             return res.type('json').send(JSON.stringify(basePathArray, null, 2));
@@ -477,166 +482,177 @@ module.exports = RED => {
           basePathArray = basePathArray.filter(( el ) => access.includes( el[0] ));
 
           res.type('json').send(JSON.stringify(basePathArray, null, 2));*/
+          });
+
+          httpNode.use('/mp4frag', Mp4fragNode.httpRouter);
+        }
+
+        this.hlsPlaylistPath = `${httpNodeRoot}mp4frag/${this.basePath}/hls.m3u8`;
+
+        this.mp4VideoPath = `${httpNodeRoot}mp4frag/${this.basePath}/video.mp4`;
+
+        this.resWaitingForSegments = new Set();
+
+        const httpRouter = Router({ caseSensitive: true });
+
+        httpRouter.get('/', (req, res) => {
+          res.type('json');
+
+          res.send(
+            JSON.stringify(
+              { payload: this.payload, mp4frag: this.mp4frag },
+              (key, value) => {
+                if (value && value.type === 'Buffer') {
+                  return `<Buffer ${value.data.length}>`;
+                }
+
+                if (key === 'm3u8' && typeof value === 'string') {
+                  return value.split('\n').slice(0, -1);
+                }
+
+                return value;
+              },
+              2
+            )
+          );
         });
 
-        httpNode.use('/mp4frag', Mp4fragNode.httpRouter);
-      }
+        httpRouter.get('/video.mp4', (req, res) => {
+          res.set('Accept-Ranges', 'none');
 
-      this.resWaitingForSegments = new Set();
+          if (/^bytes=\d+-\d+$/.test(req.headers.range) === false) {
+            if (typeof this.mp4frag === 'object') {
+              const { initialization } = this.mp4frag;
 
-      const httpRouter = Router({ caseSensitive: true });
+              if (initialization) {
+                res.type('mp4');
 
-      httpRouter.get('/', (req, res) => {
-        res.type('json');
+                res.write(initialization);
 
-        res.send(
-          JSON.stringify(
-            { payload: this.payload, mp4frag: this.mp4frag },
-            (key, value) => {
-              if (value && value.type === 'Buffer') {
-                return `<Buffer ${value.data.length}>`;
+                const preBuffer = Mp4fragNode.getInt(0, 5, 1, req.query.preBuffer);
+
+                if (preBuffer > 0) {
+                  const lastIndex = this.mp4frag.getSegmentObjectLastIndex(preBuffer);
+
+                  if (lastIndex > -1) {
+                    const { segmentObjects } = this.mp4frag;
+
+                    segmentObjects.slice(lastIndex).forEach(segmentObject => {
+                      res.write(segmentObject.segment);
+                    });
+                  }
+                }
+
+                // res.flush();
+
+                this.resWaitingForSegments.add(res);
+
+                return res.once('close', () => {
+                  this.resWaitingForSegments instanceof Set && this.resWaitingForSegments.delete(res);
+
+                  res.end();
+                });
               }
 
-              if (key === 'm3u8' && typeof value === 'string') {
-                return value.split('\n').slice(0, -1);
-              }
+              return res.status(404).send(_('mp4frag.error.initialization_not_found', { basePath: this.basePath }));
+            }
 
-              return value;
-            },
-            2
-          )
-        );
-      });
+            return res.status(404).send(_('mp4frag.error.mp4frag_not_found', { basePath: this.basePath }));
+          }
 
-      httpRouter.get('/video.mp4', (req, res) => {
-        res.set('Accept-Ranges', 'none');
+          res.status(416).send(_('mp4frag.error.byte_range_requests_not_supported', { basePath: this.basePath }));
+        });
 
-        if (/^bytes=\d+-\d+$/.test(req.headers.range) === false) {
+        httpRouter.get('/hls.m3u8:isTxt(.txt)?', (req, res) => {
+          if (typeof this.mp4frag === 'object') {
+            const { m3u8 } = this.mp4frag;
+
+            if (m3u8) {
+              const { isTxt } = req.params;
+
+              res.type(isTxt ? 'txt' : 'm3u8');
+
+              return res.send(m3u8);
+            }
+
+            return res.status(404).send(_('mp4frag.error.m3u8_not_found', { basePath: this.basePath }));
+          }
+
+          res.status(404).send(_('mp4frag.error.mp4frag_not_found', { basePath: this.basePath }));
+        });
+
+        httpRouter.get('/init-hls.mp4', (req, res) => {
           if (typeof this.mp4frag === 'object') {
             const { initialization } = this.mp4frag;
 
             if (initialization) {
               res.type('mp4');
 
-              res.write(initialization);
-
-              const preBuffer = Mp4fragNode.getInt(0, 5, 1, req.query.preBuffer);
-
-              if (preBuffer > 0) {
-                const lastIndex = this.mp4frag.getSegmentObjectLastIndex(preBuffer);
-
-                if (lastIndex > -1) {
-                  const { segmentObjects } = this.mp4frag;
-
-                  segmentObjects.slice(lastIndex).forEach(segmentObject => {
-                    res.write(segmentObject.segment);
-                  });
-                }
-              }
-
-              // res.flush();
-
-              this.resWaitingForSegments.add(res);
-
-              return res.once('close', () => {
-                this.resWaitingForSegments instanceof Set && this.resWaitingForSegments.delete(res);
-
-                res.end();
-              });
+              return res.send(initialization);
             }
 
             return res.status(404).send(_('mp4frag.error.initialization_not_found', { basePath: this.basePath }));
           }
 
-          return res.status(404).send(_('mp4frag.error.mp4frag_not_found', { basePath: this.basePath }));
-        }
+          res.status(404).send(_('mp4frag.error.mp4frag_not_found', { basePath: this.basePath }));
+        });
 
-        res.status(416).send(_('mp4frag.error.byte_range_requests_not_supported', { basePath: this.basePath }));
-      });
+        httpRouter.get('/hls:sequence([0-9]+).m4s', (req, res) => {
+          if (typeof this.mp4frag === 'object') {
+            const { sequence } = req.params;
 
-      httpRouter.get('/hls.m3u8:isTxt(.txt)?', (req, res) => {
-        if (typeof this.mp4frag === 'object') {
-          const { m3u8 } = this.mp4frag;
+            const segmentObject = this.mp4frag.getSegmentObject(sequence);
 
-          if (m3u8) {
-            const { isTxt } = req.params;
+            if (segmentObject) {
+              // res.type('m4s'); <-- not yet supported, filed issue https://github.com/jshttp/mime-db/issues/216
 
-            res.type(isTxt ? 'txt' : 'm3u8');
+              // res.type('mp4');
 
-            return res.send(m3u8);
+              res.set('Content-Type', 'video/iso.segment');
+
+              return res.send(segmentObject.segment);
+            }
+
+            return res.status(404).send(_('mp4frag.error.segment_not_found', { sequence, basePath: this.basePath }));
           }
 
-          return res.status(404).send(_('mp4frag.error.m3u8_not_found', { basePath: this.basePath }));
-        }
+          res.status(404).send(_('mp4frag.error.mp4frag_not_found', { basePath: this.basePath }));
+        });
 
-        res.status(404).send(_('mp4frag.error.mp4frag_not_found', { basePath: this.basePath }));
-      });
+        httpRouter.basePath = this.basePath;
 
-      httpRouter.get('/init-hls.mp4', (req, res) => {
-        if (typeof this.mp4frag === 'object') {
-          const { initialization } = this.mp4frag;
-
-          if (initialization) {
-            res.type('mp4');
-
-            return res.send(initialization);
-          }
-
-          return res.status(404).send(_('mp4frag.error.initialization_not_found', { basePath: this.basePath }));
-        }
-
-        res.status(404).send(_('mp4frag.error.mp4frag_not_found', { basePath: this.basePath }));
-      });
-
-      httpRouter.get('/hls:sequence([0-9]+).m4s', (req, res) => {
-        if (typeof this.mp4frag === 'object') {
-          const { sequence } = req.params;
-
-          const segmentObject = this.mp4frag.getSegmentObject(sequence);
-
-          if (segmentObject) {
-            // res.type('m4s'); <-- not yet supported, filed issue https://github.com/jshttp/mime-db/issues/216
-
-            // res.type('mp4');
-
-            res.set('Content-Type', 'video/iso.segment');
-
-            return res.send(segmentObject.segment);
-          }
-
-          return res.status(404).send(_('mp4frag.error.segment_not_found', { sequence, basePath: this.basePath }));
-        }
-
-        res.status(404).send(_('mp4frag.error.mp4frag_not_found', { basePath: this.basePath }));
-      });
-
-      httpRouter.basePath = this.basePath;
-
-      Mp4fragNode.httpRouter.use(`/${this.basePath}`, httpRouter);
+        Mp4fragNode.httpRouter.use(`/${this.basePath}`, httpRouter);
+      }
     }
 
     destroyHttpRoute() {
-      if (this.resWaitingForSegments.size > 0) {
-        this.resWaitingForSegments.forEach(res => {
-          if (res.writableEnded === false || res.finished === false) {
-            res.end();
+      if (this.serveHttp) {
+        if (this.resWaitingForSegments.size > 0) {
+          this.resWaitingForSegments.forEach(res => {
+            if (res.writableEnded === false || res.finished === false) {
+              res.end();
+            }
+          });
+
+          this.resWaitingForSegments.clear();
+        }
+
+        this.hlsPlaylistPath = undefined;
+
+        this.mp4VideoPath = undefined;
+
+        this.resWaitingForSegments = undefined;
+
+        const { stack } = Mp4fragNode.httpRouter;
+
+        for (let i = stack.length - 1; i >= 0; --i) {
+          const layer = stack[i];
+
+          if (layer.name === 'router' && layer.handle.basePath === this.basePath) {
+            stack.splice(i, 1);
+
+            break;
           }
-        });
-
-        this.resWaitingForSegments.clear();
-      }
-
-      this.resWaitingForSegments = undefined;
-
-      const { stack } = Mp4fragNode.httpRouter;
-
-      for (let i = stack.length - 1; i >= 0; --i) {
-        const layer = stack[i];
-
-        if (layer.name === 'router' && layer.handle.basePath === this.basePath) {
-          stack.splice(i, 1);
-
-          break;
         }
       }
     }
