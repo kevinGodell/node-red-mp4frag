@@ -811,7 +811,13 @@ module.exports = RED => {
       this.writing = false;
     }
 
-    onInput(msg) {
+    onInput(msg, send, done) {
+      this.handleMsg(msg);
+
+      done();
+    }
+
+    handleMsg(msg) {
       const { payload, action } = msg;
 
       if (Buffer.isBuffer(payload)) {
