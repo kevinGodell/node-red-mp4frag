@@ -25,11 +25,11 @@
       outputs: {
         value: 2,
       },
-      /*migrate: {
-        // migration versioning
-        // flag for adding new defaults
-        value: 0.000000002,
-      },*/
+      basePath: {
+        value: 'id',
+        required: true,
+        validate: RED.validators.regex(/^[a-z\d_.]{1,50}$/i),
+      },
       hlsPlaylistSize: {
         value: MP4FRAG.hlsPlaylistSizeDef,
         required: true,
@@ -48,23 +48,10 @@
           return int >= MP4FRAG.hlsPlaylistExtraMin && int <= MP4FRAG.hlsPlaylistExtraMax;
         },
       },
-      basePath: {
-        value: 'id',
-        required: true,
-        validate: RED.validators.regex(/^[a-z0-9_.]{1,50}$/i),
-      },
-      repeated: {
-        value: RED.settings.mp4frag.repeated.toString(),
-        validate: function (repeated) {
-          return ['true', 'false'].includes(repeated);
-        },
-      },
-      timeLimit: {
-        value: RED.settings.mp4frag.timeLimit,
-        validate: function (timeLimit) {
-          const int = Number.parseInt(timeLimit);
-
-          return int >= MP4FRAG.timeLimitMin && int <= MP4FRAG.timeLimitMax;
+      autoStart: {
+        value: RED.settings.mp4frag.autoStart.toString(),
+        validate: function (autoStart) {
+          return ['true', 'false'].includes(autoStart);
         },
       },
       preBuffer: {
@@ -75,16 +62,24 @@
           return int >= MP4FRAG.preBufferMin && int <= MP4FRAG.preBufferMax;
         },
       },
-      autoStart: {
-        value: RED.settings.mp4frag.autoStart.toString(),
-        validate: function (autoStart) {
-          return ['true', 'false'].includes(autoStart);
+      timeLimit: {
+        value: RED.settings.mp4frag.timeLimit,
+        validate: function (timeLimit) {
+          const int = Number.parseInt(timeLimit);
+
+          return int >= MP4FRAG.timeLimitMin && int <= MP4FRAG.timeLimitMax;
         },
       },
-      statusLocation: {
+      repeated: {
+        value: RED.settings.mp4frag.repeated.toString(),
+        validate: function (repeated) {
+          return ['true', 'false'].includes(repeated);
+        },
+      },
+      statusData: {
         value: 'displayed',
-        validate: function (statusLocation) {
-          return [undefined, 'displayed', 'wired', 'both', 'none'].includes(statusLocation);
+        validate: function (statusData) {
+          return [undefined, 'playlist', 'all'].includes(statusData);
         },
       },
     },
@@ -106,16 +101,14 @@
     outputLabels: function (index) {
       switch (index) {
         case 0:
-          return 'playlist';
+          return this.statusData === 'all' ? 'status' : 'playlist';
         case 1:
           return 'buffer';
-        case 2:
-          return 'status';
         default:
           return '';
       }
     },
-    outputs: 2, // todo editable
+    outputs: 2,
     oneditprepare: function () {
       const getIntFromVal = (min, max, def, val) => {
         const int = Number.parseInt(val);
@@ -130,7 +123,7 @@
       basePath.on('input', () => {
         const val = basePath.val();
 
-        const replace = val.replace(/[^a-z0-9_.]/gi, '');
+        const replace = val.replace(/[^a-z\d_.]/gi, '');
 
         basePath.val(replace);
       });
@@ -177,20 +170,6 @@
         ],
       });
 
-      const timeLimitDef = this._def.defaults.timeLimit.value;
-
-      const timeLimit = $('#node-input-timeLimit')
-        .spinner({
-          min: MP4FRAG.timeLimitMin,
-          max: MP4FRAG.timeLimitMax,
-          step: 1,
-          change: (event, ui) => {
-            const [int, changed] = getIntFromVal(MP4FRAG.timeLimitMin, MP4FRAG.timeLimitMax, timeLimitDef, timeLimit.val());
-            changed ? timeLimit.val(int).change() : timeLimit.val(int);
-          },
-        })
-        .prop('placeholder', timeLimitDef);
-
       const preBufferDef = this._def.defaults.preBuffer.value;
 
       const preBuffer = $('#node-input-preBuffer')
@@ -205,6 +184,20 @@
         })
         .prop('placeholder', preBufferDef);
 
+      const timeLimitDef = this._def.defaults.timeLimit.value;
+
+      const timeLimit = $('#node-input-timeLimit')
+        .spinner({
+          min: MP4FRAG.timeLimitMin,
+          max: MP4FRAG.timeLimitMax,
+          step: 1,
+          change: (event, ui) => {
+            const [int, changed] = getIntFromVal(MP4FRAG.timeLimitMin, MP4FRAG.timeLimitMax, timeLimitDef, timeLimit.val());
+            changed ? timeLimit.val(int).change() : timeLimit.val(int);
+          },
+        })
+        .prop('placeholder', timeLimitDef);
+
       const repeated = $('#node-input-repeated').typedInput({
         types: [
           {
@@ -215,27 +208,19 @@
         ],
       });
 
-      const statusLocation = $('#node-input-statusLocation').typedInput({
+      const statusData = $('#node-input-statusData').typedInput({
         types: [
           {
             value: 'str',
             //icon: 'fa fa-list-ol',
-            options: ['displayed', 'wired', 'both', 'none'],
+            options: [
+              { value: 'playlist', label: 'playlist' },
+              { value: 'all', label: 'playlist & mp4 metadata' },
+              //{ value: 'none', label: 'none'},
+            ],
           },
         ],
       });
-
-      // migration code start
-      /*if (typeof this.migrate === 'undefined' || this.migrate < this._def.defaults.migrate.value) {
-        this.migrate = this._def.defaults.migrate.value;
-
-        repeated.val(this._def.defaults.repeated.value.toString());
-
-        timeLimit.val(this._def.defaults.timeLimit.value);
-
-        preBuffer.val(this._def.defaults.preBuffer.value);
-      }*/
-      // migration code end
 
       $('<button type="button" class="red-ui-button red-ui-button-small"><i class="fa fa-book"></i> help</button>')
         .on('click', () => {
@@ -244,11 +229,8 @@
         .appendTo($('div.red-ui-tray-footer'));
     },
     oneditsave: function () {
-      const statusLocation = $('#node-input-statusLocation').typedInput('value');
-
-      if (['wired', 'both'].includes(statusLocation)) {
-        this.outputs = 3;
-      } else {
+      // old version had 3 outputs depending on status location setting
+      if (this.outputs > 2) {
         this.outputs = 2;
       }
     },
@@ -331,11 +313,11 @@
   <fieldset>
     <legend>Status Output</legend>
 
-    <p class="form-tips">Status can be displayed, sent to wired output, both, or none.</p>
+    <p class="form-tips">Status output can include additional mp4 metadata.</p>
 
     <div class="form-row">
-      <label for="node-input-statusLocation"><i class="fa fa-gears"></i> Location</label>
-      <input id="node-input-statusLocation" />
+      <label for="node-input-statusData"><i class="fa fa-gears"></i> Data Types</label>
+      <input id="node-input-statusData" />
     </div>
   </fieldset>
 </script>
