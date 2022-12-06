@@ -11,7 +11,8 @@
       "removed": "removed",
       "closed": "closed",
       "reset": "reset",
-      "segment": "s: __sequence__, d: __duration__, k: __keyframe__, td: __totalDuration__, tb: __totalByteLength__"
+      "segment": "s: __sequence__, d: __duration__, k: __keyframe__, td: __totalDuration__, tb: __totalByteLength__",
+      "status": "http: __http__, io: __io__, buffer: __buffer__"
     },
     "success": {},
     "warning": {
