@@ -45,7 +45,7 @@ module.exports = RED => {
 
       this.preBuffer = Mp4fragNode.getInt(0, 5, Mp4fragNode.preBuffer, config.preBuffer);
 
-      this.statusLocation = Mp4fragNode.getStatusLocation(config.statusLocation);
+      this.statusData = config.statusData === 'all' ? 'all' : 'playlist';
 
       this.serveHttp = config.serveHttp !== 'false'; // todo future config
 
@@ -53,7 +53,7 @@ module.exports = RED => {
 
       this.writing = false;
 
-      this.status({});
+      this.displayedStatus = { http: 'off', io: 'off', buffer: 'off', fill: 'yellow' };
 
       try {
         this.createPaths(); // throws
@@ -67,17 +67,17 @@ module.exports = RED => {
         this.on('input', this.onInput);
 
         this.on('close', this.onClose);
-
-        this.statusLocation.displayed && this.status({ fill: 'green', shape: 'ring', text: _('mp4frag.info.ready') });
-
-        this.statusLocation.wired && this.send([null, null, { payload: { status: 'ready' } }]);
       } catch (error) {
         this.error(error);
 
-        this.statusLocation.displayed && this.status({ fill: 'red', shape: 'dot', text: err.toString() });
-
-        this.statusLocation.wired && this.send([null, null, { payload: { status: 'error', error } }]);
+        this.status({ fill: 'red', shape: 'dot', text: error.toString() });
       }
+    }
+
+    updateDisplayedStatus() {
+      const { fill, http, io, buffer } = this.displayedStatus;
+
+      this.status({ fill, shape: 'dot', text: _('mp4frag.info.status', { http, io, buffer }) });
     }
 
     createPaths() {
@@ -93,13 +93,8 @@ module.exports = RED => {
 
       Mp4fragNode.basePathMap.set(this.basePath, { id: this.id, running: false });
 
-      // this.hlsPlaylistPath = this.serveHttp && `${httpNodeRoot}mp4frag/${this.basePath}/hls.m3u8` || undefined;
-
-      // this.mp4VideoPath = this.serveHttp && `${httpNodeRoot}mp4frag/${this.basePath}/video.mp4` || undefined;
-
-      // this.ioNamespace = `/${this.basePath}`;
-
       this.topic = {
+        status: `mp4frag/${this.basePath}/status`,
         buffer: {
           init: `mp4frag/${this.basePath}/buffer/init`,
           pre: `mp4frag/${this.basePath}/buffer/pre`,
@@ -111,16 +106,11 @@ module.exports = RED => {
     destroyPaths() {
       Mp4fragNode.basePathMap.delete(this.basePath);
 
-      // this.hlsPlaylistPath = undefined;
-
-      // this.mp4VideoPath = undefined;
-
-      // this.ioNamespace = undefined;
-
       this.topic = undefined;
     }
 
     createMp4frag() {
+      // todo change hlsPlaylist options if serveHttp === false
       this.mp4frag = new Mp4Frag({
         hlsPlaylistBase: 'hls',
         hlsPlaylistSize: this.hlsPlaylistSize,
@@ -133,31 +123,37 @@ module.exports = RED => {
 
         const { videoCodec, audioCodec } = this.mp4frag;
 
-        this.statusLocation.displayed && this.status({ fill: 'green', shape: 'dot', text: mime });
-
-        this.statusLocation.wired && this.send([null, null, { payload: { status: 'initialized', mime, videoCodec, audioCodec } }]);
+        this.statusData === 'all' && this.send({ topic: this.topic.status, status: 'initialized', payload: { mime, videoCodec, audioCodec } });
 
         const item = Mp4fragNode.basePathMap.get(this.basePath);
 
         item.running = true;
-      });
 
-      this.mp4frag.on('segment', data => {
-        const { segment, sequence, duration, keyframe, timestamp } = data;
+        this.mp4frag.prependOnceListener('segment', data => {
+          if (this.serveHttp || this.serveIo) {
+            this.playlist = {
+              hlsPlaylist: this.hlsPlaylistPath,
 
-        if (sequence === 0) {
-          this.payload = {
-            hlsPlaylist: this.hlsPlaylistPath,
-            mp4Video: this.mp4VideoPath,
-            socketIo: this.socketIoClient,
-          };
+              mp4Video: this.mp4VideoPath,
 
-          this.send({ payload: this.payload });
+              socketIo: this.socketIoClient,
+            };
+
+            this.send({ topic: this.topic.status, status: 'playlist', payload: this.playlist });
+          }
 
           if (this.autoStart === true) {
             this.startWriting(0, this.timeLimit, this.repeated);
           }
-        }
+
+          this.displayedStatus.fill = 'green';
+
+          this.updateDisplayedStatus();
+        });
+      });
+
+      this.mp4frag.on('segment', data => {
+        const { segment, sequence, duration, keyframe, timestamp } = data;
 
         // trigger time range error
         /* if (sequence % 50 === 0) {
@@ -197,21 +193,7 @@ module.exports = RED => {
 
         const { totalDuration, totalByteLength } = this.mp4frag;
 
-        this.statusLocation.displayed &&
-          this.status({
-            fill: this.writing ? 'yellow' : 'green',
-            shape: 'dot',
-            text: _('mp4frag.info.segment', {
-              sequence,
-              duration: duration.toFixed(2),
-              keyframe: keyframe ? 1 : 0,
-              totalDuration: totalDuration.toFixed(2),
-              totalByteLength: (totalByteLength / 1000000).toFixed(2),
-            }),
-          });
-
-        this.statusLocation.wired &&
-          this.send([null, null, { payload: { status: 'segment', sequence, duration, byteLength, keyframe, totalDuration, totalByteLength } }]);
+        this.statusData === 'all' && this.send({ topic: this.topic.status, status: 'segment', payload: { sequence, duration, byteLength, keyframe, totalDuration, totalByteLength } });
       });
 
       this.mp4frag.on('error', error => {
@@ -219,11 +201,9 @@ module.exports = RED => {
 
         this.mp4frag.resetCache();
 
-        // this.error(error);
+        this.error(error);
 
-        this.statusLocation.displayed && this.status({ fill: 'red', shape: 'dot', text: error.toString() });
-
-        this.statusLocation.wired && this.send([null, null, { payload: { status: 'error', error } }]);
+        this.status({ fill: 'red', shape: 'dot', text: error.toString() });
       });
 
       this.mp4frag.on('reset', () => {
@@ -238,6 +218,12 @@ module.exports = RED => {
         const item = Mp4fragNode.basePathMap.get(this.basePath);
 
         item.running = false;
+
+        this.playlist && this.send({ topic: this.topic.status, status: 'reset', payload: '' });
+
+        this.displayedStatus.fill = 'yellow';
+
+        this.updateDisplayedStatus();
       });
     }
 
@@ -259,8 +245,10 @@ module.exports = RED => {
       if (this.serveIo) {
         if (typeof Mp4fragNode.ioServer === 'undefined') {
           Mp4fragNode.ioPath = `${httpNodeRoot}mp4frag/socket.io`;
+
           Mp4fragNode.ioServer = Io(server, {
             path: Mp4fragNode.ioPath,
+
             transports: ['websocket' /* , 'polling'*/],
           });
         }
@@ -406,6 +394,10 @@ module.exports = RED => {
             socket.emit('auth', false);
           }
         });
+
+        this.displayedStatus.io = 'on';
+
+        this.updateDisplayedStatus();
       }
     }
 
@@ -438,6 +430,10 @@ module.exports = RED => {
         }
 
         this.ioNamespace = undefined;
+
+        this.displayedStatus.io = 'off';
+
+        this.updateDisplayedStatus();
       }
     }
 
@@ -500,7 +496,7 @@ module.exports = RED => {
 
           res.send(
             JSON.stringify(
-              { payload: this.payload, mp4frag: this.mp4frag },
+              { playlist: this.playlist, mp4frag: this.mp4frag },
               (key, value) => {
                 if (value && value.type === 'Buffer') {
                   return `<Buffer ${value.data.length}>`;
@@ -622,6 +618,8 @@ module.exports = RED => {
         httpRouter.basePath = this.basePath;
 
         Mp4fragNode.httpRouter.use(`/${this.basePath}`, httpRouter);
+
+        this.displayedStatus.http = 'on';
       }
     }
 
@@ -654,6 +652,10 @@ module.exports = RED => {
             break;
           }
         }
+
+        this.displayedStatus.http = 'off';
+
+        this.updateDisplayedStatus();
       }
     }
 
@@ -661,14 +663,6 @@ module.exports = RED => {
       this.stopWriting();
 
       this.mp4frag.resetCache();
-
-      this.payload = '';
-
-      this.send({ /* topic: 'set_source', */ payload: this.payload });
-
-      this.statusLocation.displayed && this.status({ fill: 'green', shape: 'ring', text: _('mp4frag.info.reset') });
-
-      this.statusLocation.wired && this.send([null, null, { payload: { status: 'reset' } }]);
     }
 
     destroy() {
@@ -685,10 +679,6 @@ module.exports = RED => {
       this.destroyMp4frag();
 
       this.destroyPaths();
-
-      this.payload = '';
-
-      this.send({ /* topic: 'set_source', */ payload: this.payload });
     }
 
     startWriting(preBuffer, timeLimit, repeated) {
@@ -696,9 +686,10 @@ module.exports = RED => {
 
       if (initialization === null) {
         // todo temp set autoStart to true if called before starting
-        // this.statusLocation.displayed && this.status({ fill: 'yellow', shape: 'dot', text: _('mp4frag.warning.not_initialized') });
 
-        // this.statusLocation.wired && this.send([null, null, { payload: { status: 'warning', error} }]);
+        // this.status({ fill: 'yellow', shape: 'dot', text: _('mp4frag.warning.not_initialized') });
+
+        // this.send([null, null, { payload: { status: 'warning', error} }]);
 
         return;
       }
@@ -718,9 +709,9 @@ module.exports = RED => {
         return;
       }
 
-      const filename = Mp4fragNode.filenameFunc({ basePath: this.basePath });
+      // const filename = Mp4fragNode.filenameFunc({ basePath: this.basePath });
 
-      this.send([null, { topic: this.topic.buffer.init, retain: true, writeMode, payload: initialization, filename, action: { command: 'start' }, duration }]);
+      this.send([null, { topic: this.topic.buffer.init, retain: true, writeMode, payload: initialization /* , filename*/ /* , action: { command: 'start' }*/, duration }]);
 
       if (preBuffer > 0) {
         const lastIndex = this.mp4frag.getSegmentObjectLastIndex(preBuffer);
@@ -735,7 +726,7 @@ module.exports = RED => {
           segmentObjects.slice(lastIndex).forEach(segmentObject => {
             const { segment: payload, duration, timestamp, sequence } = segmentObject;
 
-            this.send([null, { topic, retain, writeMode, payload, filename, duration, timestamp, sequence }]);
+            this.send([null, { topic, retain, writeMode, payload, /* filename, */ duration, timestamp, sequence }]);
           });
         }
       }
@@ -748,7 +739,7 @@ module.exports = RED => {
         case 'unlimited':
           {
             this.mp4fragWriter = (segment, sequence, duration, timestamp) => {
-              this.send([null, { topic, retain, writeMode, payload: segment, filename, sequence, duration, timestamp }]);
+              this.send([null, { topic, retain, writeMode, payload: segment, /* filename, */ sequence, duration, timestamp }]);
             };
           }
           break;
@@ -758,10 +749,12 @@ module.exports = RED => {
             this.endTime = Date.now() + timeLimit;
 
             this.mp4fragWriter = (segment, sequence, duration, timestamp) => {
-              this.send([null, { topic, retain, writeMode, payload: segment, filename, sequence, duration, timestamp }]);
+              this.send([null, { topic, retain, writeMode, payload: segment, /* filename, */ sequence, duration, timestamp }]);
 
               if (Date.now() >= this.endTime) {
                 this.stopWriting();
+
+                this.updateDisplayedStatus();
               }
             };
           }
@@ -769,15 +762,18 @@ module.exports = RED => {
 
         case 'continuous':
           {
+            console.log('contnu');
             const endTime = Date.now() + timeLimit;
 
             this.mp4fragWriter = (segment, sequence, duration, timestamp) => {
-              this.send([null, { topic, retain, writeMode, payload: segment, filename, sequence, duration, timestamp }]);
+              this.send([null, { topic, retain, writeMode, payload: segment, /* filename, */ sequence, duration, timestamp }]);
 
               if (Date.now() >= endTime) {
                 this.stopWriting();
 
                 this.startWriting(preBuffer, timeLimit, repeated);
+
+                this.updateDisplayedStatus();
               }
             };
           }
@@ -786,9 +782,13 @@ module.exports = RED => {
 
       this.writing = true;
 
+      this.displayedStatus.buffer = 'on';
+
+      this.updateDisplayedStatus();
+
       this.writeMode = writeMode;
 
-      this.filename = filename;
+      // this.filename = filename;
     }
 
     stopWriting() {
@@ -796,9 +796,9 @@ module.exports = RED => {
         return;
       }
 
-      const { filename } = this;
+      /* const { filename } = this;
 
-      this.filename = undefined;
+      this.filename = undefined;*/
 
       this.writeMode = undefined;
 
@@ -806,9 +806,13 @@ module.exports = RED => {
 
       this.endTime = undefined;
 
-      this.send([null, { topic: this.topic.buffer.init, retain: true, payload: Buffer.allocUnsafe(0), filename }]);
+      this.send([null, { topic: this.topic.buffer.init, retain: true, payload: Buffer.allocUnsafe(0) /* , filename*/ }]);
 
       this.writing = false;
+
+      this.displayedStatus.buffer = 'off';
+
+      this.updateDisplayedStatus();
     }
 
     onInput(msg, send, done) {
@@ -872,34 +876,12 @@ module.exports = RED => {
       this.destroy();
 
       if (removed) {
-        this.statusLocation.displayed && this.status({ fill: 'grey', shape: 'ring', text: _('mp4frag.info.removed') });
-
-        this.statusLocation.wired && this.send([null, null, { payload: { status: 'remove' } }]);
+        this.status({ fill: 'grey', shape: 'ring', text: _('mp4frag.info.removed') });
       } else {
-        this.statusLocation.displayed && this.status({ fill: 'grey', shape: 'dot', text: _('mp4frag.info.closed') });
-
-        this.statusLocation.wired && this.send([null, null, { payload: { status: 'closed' } }]);
+        this.status({ fill: 'grey', shape: 'dot', text: _('mp4frag.info.closed') });
       }
 
       done();
-    }
-
-    static getStatusLocation(location) {
-      switch (location) {
-        case 'none':
-          return {};
-
-        case 'wired':
-          return { wired: true };
-
-        case 'both':
-          return { displayed: true, wired: true };
-
-        case 'displayed':
-
-        default:
-          return { displayed: true };
-      }
     }
 
     static getInt(min, max, def, val) {
@@ -908,7 +890,7 @@ module.exports = RED => {
       return Number.isNaN(int) ? def : int < min ? min : int > max ? max : int;
     }
 
-    static getFilenameFunc(filenameFunc) {
+    /* static getFilenameFunc(filenameFunc) {
       try {
         if (typeof filenameFunc !== 'undefined' && typeof filenameFunc({ basePath: 'test' }) === 'string') {
           return filenameFunc;
@@ -917,7 +899,7 @@ module.exports = RED => {
         error(_('mp4frag.error.filenameFunc', { error: err.toString() }));
       }
       return args => `mp4frag/${args.basePath}/${Date.now()}.mp4`;
-    }
+    }*/
   }
 
   if (typeof settings.mp4frag !== 'object') {
@@ -934,11 +916,11 @@ module.exports = RED => {
 
   mp4frag.preBuffer = Mp4fragNode.getInt(0, 5, 1, mp4frag.preBuffer);
 
-  mp4frag.filenameFunc = Mp4fragNode.getFilenameFunc(mp4frag.filenameFunc);
+  // mp4frag.filenameFunc = Mp4fragNode.getFilenameFunc(mp4frag.filenameFunc);
 
-  const { httpMiddleware = null, ioMiddleware = null, autoStart, repeated, timeLimit, preBuffer, filenameFunc } = mp4frag;
+  const { httpMiddleware = null, ioMiddleware = null, autoStart, repeated, timeLimit, preBuffer /* , filenameFunc*/ } = mp4frag;
 
-  Mp4fragNode.basePathRegex = /^[a-z0-9_.]{1,50}$/i;
+  Mp4fragNode.basePathRegex = /^[a-z\d_.]{1,50}$/i;
 
   Mp4fragNode.basePathMap = new Map();
 
@@ -958,7 +940,7 @@ module.exports = RED => {
 
   Mp4fragNode.preBuffer = preBuffer;
 
-  Mp4fragNode.filenameFunc = filenameFunc;
+  // Mp4fragNode.filenameFunc = filenameFunc;
 
   Mp4fragNode.type = 'mp4frag';
 
