@@ -753,8 +753,6 @@ module.exports = RED => {
 
               if (Date.now() >= this.endTime) {
                 this.stopWriting();
-
-                this.updateDisplayedStatus();
               }
             };
           }
@@ -762,7 +760,6 @@ module.exports = RED => {
 
         case 'continuous':
           {
-            console.log('contnu');
             const endTime = Date.now() + timeLimit;
 
             this.mp4fragWriter = (segment, sequence, duration, timestamp) => {
@@ -772,21 +769,19 @@ module.exports = RED => {
                 this.stopWriting();
 
                 this.startWriting(preBuffer, timeLimit, repeated);
-
-                this.updateDisplayedStatus();
               }
             };
           }
           break;
       }
 
+      this.writeMode = writeMode;
+
       this.writing = true;
 
       this.displayedStatus.buffer = 'on';
 
       this.updateDisplayedStatus();
-
-      this.writeMode = writeMode;
 
       // this.filename = filename;
     }
