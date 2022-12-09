@@ -77,7 +77,7 @@
         },
       },
       statusData: {
-        value: 'displayed',
+        value: 'playlist',
         validate: function (statusData) {
           return [undefined, 'playlist', 'all'].includes(statusData);
         },
@@ -129,7 +129,7 @@
       });
 
       if (basePath.val() === '') {
-        basePath.val('id');
+        basePath.val(this.id);
       }
 
       const hlsPlaylistSizeDef = this._def.defaults.hlsPlaylistSize.value;
@@ -232,6 +232,17 @@
       // old version had 3 outputs depending on status location setting
       if (this.outputs > 2) {
         this.outputs = 2;
+      }
+
+      const basePath = $('#node-input-basePath');
+
+      if (basePath.val() === '') {
+        basePath.val(this.id);
+      }
+    },
+    onadd: function () {
+      if (this.basePath === this._def.defaults.basePath.value) {
+        this.basePath = this.id;
       }
     },
   });
