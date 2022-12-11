@@ -22,8 +22,7 @@ module.exports = RED => {
     server,
     settings: { httpNodeRoot, mp4frag: mp4fragSettings },
     _,
-    nodes: { createNode, registerType },
-    log: { error },
+    nodes: { createNode, registerType }
   } = RED;
 
   const { httpMiddleware = null, ioMiddleware = null } = typeof mp4fragSettings === 'object' && mp4fragSettings !== null ? mp4fragSettings : {};
@@ -702,11 +701,9 @@ module.exports = RED => {
       const { initialization, duration } = this.mp4frag;
 
       if (initialization === null) {
-        // todo temp set autoStart to true if called before starting
+        // todo temp set autoStart to true if called before initialized
 
-        // this.status({ fill: 'yellow', shape: 'dot', text: _('mp4frag.warning.not_initialized') });
-
-        // this.send([null, null, { payload: { status: 'warning', error} }]);
+        this.warn(_('mp4frag.warning.not_initialized'));
 
         return;
       }
@@ -820,13 +817,13 @@ module.exports = RED => {
     }
 
     onInput(msg, send, done) {
-      this.handleMsg(msg);
-
       this._msgid = msg._msgid;
 
       // this.lastSend = send;
 
       // this.lastMsg = msg;
+
+      this.handleMsg(msg);
 
       done();
     }

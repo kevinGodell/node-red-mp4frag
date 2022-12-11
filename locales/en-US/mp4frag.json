@@ -1,29 +1,16 @@
 {
   "mp4frag": {
-    "label": {
-      "hls_playlist_size": "HLS Playlist Size",
-      "hls_playlist_extra": "HLS Playlist Extra",
-      "bytes": "bytes",
-      "milliseconds": "milliseconds"
-    },
+    "label": {},
     "info": {
-      "ready": "ready",
       "removed": "removed",
       "closed": "closed",
-      "reset": "reset",
-      "segment": "s: __sequence__, d: __duration__, k: __keyframe__, td: __totalDuration__, tb: __totalByteLength__",
       "status": "http: __http__, io: __io__, buffer: __buffer__"
     },
     "success": {},
     "warning": {
-      "unknown_payload": "unknown payload \"__payload__\"",
-      "size_limit": "Add property <strong>mp4frag.sizeLimit</strong> to <em>settings.js</em><hr/><code class=\"form-tips\">mp4frag: { sizeLimit: __sizeLimit__ }</code>",
-      "time_limit": "Add property <strong>mp4frag.timeLimit</strong> to <em>settings.js</em><hr/><code class=\"form-tips\">mp4frag: { timeLimit: __timeLimit__ }</code>",
       "not_initialized": "not initialized"
     },
     "error": {
-      "command_path_invalid": "commandPath \"__commandPath__\" is invalid",
-      "command_args_invalid": "commandArgs \"__commandArgs__\" is invalid",
       "base_path_invalid": "basePath \"__basePath__\" is invalid",
       "base_path_duplicate": "basePath \"__basePath__\" is already in use",
       "mp4frag_not_found": "mp4frag not found for \"__basePath__\"",
@@ -31,8 +18,7 @@
       "segment_not_found": "segment __sequence__ not found for \"__basePath__\"",
       "mime_not_found": "mime not found for \"__basePath__\"",
       "initialization_not_found": "initialization fragment not found for \"__basePath__\"",
-      "byte_range_requests_not_supported": "byte range requests not supported for \"__basePath__\"",
-      "filenameFunc": "mp4frag.filenameFunc \"__error__\""
+      "byte_range_requests_not_supported": "byte range requests not supported for \"__basePath__\""
     }
   }
 }
