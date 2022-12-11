@@ -22,7 +22,7 @@ module.exports = RED => {
     server,
     settings: { httpNodeRoot, mp4frag: mp4fragSettings },
     _,
-    nodes: { createNode, registerType }
+    nodes: { createNode, registerType },
   } = RED;
 
   const { httpMiddleware = null, ioMiddleware = null } = typeof mp4fragSettings === 'object' && mp4fragSettings !== null ? mp4fragSettings : {};
