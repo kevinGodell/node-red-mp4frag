@@ -111,20 +111,40 @@
   <h3>Outputs</h3>
   <ul>
     <li>
-      <h4>Playlist</h4>
+      <h4>Status</h4>
       <ul>
+        <li>output can be a playlist or mp4 metadata</li>
         <li>
           sends an output <code>msg</code> structured as:
           <pre class="form-tips" style="min-width: 450px"><code>
 {
+  topic: 'mp4frag/front_porch_sub/status',
+  status: 'playlist',
   payload: {
-    hlsPlaylist: '/mp4frag/front_door_10/hls.m3u8',
-    mp4Video: '/mp4frag/front_door_1/video.mp4',
+    hlsPlaylist: '/mp4frag/front_porch_sub/hls.m3u8',
+    mp4Video: '/mp4frag/front_porch_sub/video.mp4',
     socketIo: {
       path: '/mp4frag/socket.io',
-      namespace: '/front_door_1',
-      key: '4454022a67ff1abb471c00871ae1ef',
+      namespace: '/front_porch_sub',
+      key: 'd6bf3a3e30420f552cc66f252b1c19'
     }
+  }
+}
+          </code></pre>
+        </li>
+        <li>
+          sends an output <code>msg</code> structured as:
+          <pre class="form-tips" style="min-width: 450px"><code>
+{
+  topic: 'mp4frag/front_porch_sub/status',
+  status: 'segment',
+  payload: {
+    sequence: 3,
+    duration: 1.3,
+    byteLength: 33219,
+    keyframe: true,
+    totalDuration: 4.34,
+    totalByteLength: 134625,
   }
 }
           </code></pre>
@@ -142,9 +162,10 @@
               the first output <code>msg</code> is structured as:
               <pre class="form-tips" style="min-width: 450px"><code>
 {
-  action: {
-    command: 'start'
-  }
+  topic: '/mp4frag/front_porch_sub/buffer/init',
+  retain: true,
+  payload: buffer[1242],
+  duration: 1.2
 }
               </code></pre>
             </li>
@@ -152,9 +173,12 @@
               the next output <code>msg</code>s are structured as:
               <pre class="form-tips" style="min-width: 450px"><code>
 {
-  topic: 'initialization' | 'segment',
-  mode: 'single' | 'continuous' | 'unlimited',
-  payload: &lt;Buffer&gt;
+  topic: '/mp4frag/front_porch_sub/buffer/seg',
+  retain: false,
+  payload: buffer[436246]
+  duration: 1.2
+  timestamp: 1670729417526
+  sequence: 158
 }
               </code></pre>
             </li>
@@ -162,20 +186,14 @@
               the last output <code>msg</code> is structured as:
               <pre class="form-tips" style="min-width: 450px"><code>
 {
-  action: {
-    command: 'stop'
-  }
+  topic: '/mp4frag/front_porch_sub/buffer/init',
+  retain: true,
+  payload: buffer[0]
 }
               </code></pre>
             </li>
           </ol>
         </li>
-      </ul>
-    </li>
-    <li>
-      <h4>Status</h4>
-      <ul>
-        <li>outputs status that can be used to monitor various details</li>
       </ul>
     </li>
   </ul>
@@ -198,7 +216,7 @@
       </ul>
     </li>
     <li>
-      <h4>HLS Playlist</h4>
+      <h4>Buffered Segments</h4>
       <ul>
         <li>
           <h5>Size</h5>
@@ -257,7 +275,8 @@
           <h5>Data Type</h5>
           <ul>
             <li>select data type for status output</li>
-            <li>playlist only or playlist and mp4 metadata</li>
+            <li>playlist only</li>
+            <li>playlist and mp4 metadata</li>
           </ul>
         </li>
       </ul>

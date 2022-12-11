@@ -1,16 +1,10 @@
 <script type="text/javascript">
   // define magic numbers
   const MP4FRAG = {
-    hlsPlaylistSizeDef: 4,
-    hlsPlaylistSizeMin: 2,
-    hlsPlaylistSizeMax: 20,
-    hlsPlaylistExtraDef: 0,
-    hlsPlaylistExtraMin: 0,
-    hlsPlaylistExtraMax: 10,
-    timeLimitMin: -1,
-    timeLimitMax: Number.MAX_SAFE_INTEGER,
-    preBufferMin: 0,
-    preBufferMax: 5,
+    hlsPlaylistSize: { def: 4, min: 2, max: 20 },
+    hlsPlaylistExtra: { def: 0, min: 0, max: 10 },
+    timeLimit: { def: 10000, min: -1, max: Number.MAX_SAFE_INTEGER },
+    preBuffer: { def: 1, min: 0, max: 5 },
   };
 
   // register node
@@ -30,56 +24,73 @@
         required: true,
         validate: RED.validators.regex(/^[a-z\d_.]{1,50}$/i),
       },
+      serveHttp: {
+        value: 'true',
+        validate: function (serveHttp) {
+          return ['true', 'false'].includes(serveHttp);
+        },
+      },
+      serveIo: {
+        value: 'true',
+        validate: function (serveIo) {
+          return ['true', 'false'].includes(serveIo);
+        },
+      },
       hlsPlaylistSize: {
-        value: MP4FRAG.hlsPlaylistSizeDef,
+        value: MP4FRAG.hlsPlaylistSize.def,
         required: true,
         validate: function (hlsPlaylistSize) {
           const int = Number.parseInt(hlsPlaylistSize);
 
-          return int >= MP4FRAG.hlsPlaylistSizeMin && int <= MP4FRAG.hlsPlaylistSizeMax;
+          return int >= MP4FRAG.hlsPlaylistSize.min && int <= MP4FRAG.hlsPlaylistSize.max;
         },
       },
       hlsPlaylistExtra: {
-        value: MP4FRAG.hlsPlaylistExtraDef,
+        value: MP4FRAG.hlsPlaylistExtra.def,
         required: true,
         validate: function (hlsPlaylistExtra) {
           const int = Number.parseInt(hlsPlaylistExtra);
 
-          return int >= MP4FRAG.hlsPlaylistExtraMin && int <= MP4FRAG.hlsPlaylistExtraMax;
+          return int >= MP4FRAG.hlsPlaylistExtra.min && int <= MP4FRAG.hlsPlaylistExtra.max;
         },
       },
       autoStart: {
-        value: RED.settings.mp4frag.autoStart.toString(),
+        value: 'false',
+        required: true,
         validate: function (autoStart) {
           return ['true', 'false'].includes(autoStart);
         },
       },
       preBuffer: {
-        value: RED.settings.mp4frag.preBuffer,
+        value: MP4FRAG.preBuffer.def,
+        required: true,
         validate: function (preBuffer) {
           const int = Number.parseInt(preBuffer);
 
-          return int >= MP4FRAG.preBufferMin && int <= MP4FRAG.preBufferMax;
+          return int >= MP4FRAG.preBuffer.min && int <= MP4FRAG.preBuffer.max;
         },
       },
       timeLimit: {
-        value: RED.settings.mp4frag.timeLimit,
+        value: MP4FRAG.timeLimit.def,
+        required: true,
         validate: function (timeLimit) {
           const int = Number.parseInt(timeLimit);
 
-          return int >= MP4FRAG.timeLimitMin && int <= MP4FRAG.timeLimitMax;
+          return int >= MP4FRAG.timeLimit.min && int <= MP4FRAG.timeLimit.max;
         },
       },
       repeated: {
-        value: RED.settings.mp4frag.repeated.toString(),
+        value: 'false',
+        required: true,
         validate: function (repeated) {
           return ['true', 'false'].includes(repeated);
         },
       },
       statusData: {
         value: 'playlist',
+        required: true,
         validate: function (statusData) {
-          return [undefined, 'playlist', 'all'].includes(statusData);
+          return ['playlist', 'all'].includes(statusData);
         },
       },
     },
@@ -132,15 +143,35 @@
         basePath.val(this.id);
       }
 
+      const serveHttp = $('#node-input-serveHttp').typedInput({
+        types: [
+          {
+            value: 'bool',
+            //icon: 'fa fa-list-ol',
+            options: ['false', 'true'],
+          },
+        ],
+      });
+
+      const serveIo = $('#node-input-serveIo').typedInput({
+        types: [
+          {
+            value: 'bool',
+            //icon: 'fa fa-list-ol',
+            options: ['false', 'true'],
+          },
+        ],
+      });
+
       const hlsPlaylistSizeDef = this._def.defaults.hlsPlaylistSize.value;
 
       const hlsPlaylistSize = $('#node-input-hlsPlaylistSize')
         .spinner({
-          min: MP4FRAG.hlsPlaylistSizeMin,
-          max: MP4FRAG.hlsPlaylistSizeMax,
+          min: MP4FRAG.hlsPlaylistSize.min,
+          max: MP4FRAG.hlsPlaylistSize.max,
           step: 1,
           change: (event, ui) => {
-            const [int, changed] = getIntFromVal(MP4FRAG.hlsPlaylistSizeMin, MP4FRAG.hlsPlaylistSizeMax, MP4FRAG.hlsPlaylistSizeDef, hlsPlaylistSize.val());
+            const [int, changed] = getIntFromVal(MP4FRAG.hlsPlaylistSize.min, MP4FRAG.hlsPlaylistSize.max, hlsPlaylistSizeDef, hlsPlaylistSize.val());
             changed ? hlsPlaylistSize.val(int).change() : hlsPlaylistSize.val(int);
           },
         })
@@ -150,11 +181,11 @@
 
       const hlsPlaylistExtra = $('#node-input-hlsPlaylistExtra')
         .spinner({
-          min: MP4FRAG.hlsPlaylistExtraMin,
-          max: MP4FRAG.hlsPlaylistExtraMax,
+          min: MP4FRAG.hlsPlaylistExtra.min,
+          max: MP4FRAG.hlsPlaylistExtra.max,
           step: 1,
           change: (event, ui) => {
-            const [int, changed] = getIntFromVal(MP4FRAG.hlsPlaylistExtraMin, MP4FRAG.hlsPlaylistExtraMax, MP4FRAG.hlsPlaylistExtraDef, hlsPlaylistExtra.val());
+            const [int, changed] = getIntFromVal(MP4FRAG.hlsPlaylistExtra.min, MP4FRAG.hlsPlaylistExtra.max, hlsPlaylistExtraDef, hlsPlaylistExtra.val());
             changed ? hlsPlaylistExtra.val(int).change() : hlsPlaylistExtra.val(int);
           },
         })
@@ -174,11 +205,11 @@
 
       const preBuffer = $('#node-input-preBuffer')
         .spinner({
-          min: MP4FRAG.preBufferMin,
-          max: MP4FRAG.preBufferMax,
+          min: MP4FRAG.preBuffer.min,
+          max: MP4FRAG.preBuffer.max,
           step: 1,
           change: (event, ui) => {
-            const [int, changed] = getIntFromVal(MP4FRAG.preBufferMin, MP4FRAG.preBufferMax, preBufferDef, preBuffer.val());
+            const [int, changed] = getIntFromVal(MP4FRAG.preBuffer.min, MP4FRAG.preBuffer.max, preBufferDef, preBuffer.val());
             changed ? preBuffer.val(int).change() : preBuffer.val(int);
           },
         })
@@ -188,11 +219,11 @@
 
       const timeLimit = $('#node-input-timeLimit')
         .spinner({
-          min: MP4FRAG.timeLimitMin,
-          max: MP4FRAG.timeLimitMax,
+          min: MP4FRAG.timeLimit.min,
+          max: MP4FRAG.timeLimit.max,
           step: 1,
           change: (event, ui) => {
-            const [int, changed] = getIntFromVal(MP4FRAG.timeLimitMin, MP4FRAG.timeLimitMax, timeLimitDef, timeLimit.val());
+            const [int, changed] = getIntFromVal(MP4FRAG.timeLimit.min, MP4FRAG.timeLimit.max, timeLimitDef, timeLimit.val());
             changed ? timeLimit.val(int).change() : timeLimit.val(int);
           },
         })
@@ -246,6 +277,7 @@
       }
     },
   });
+  //})();
 </script>
 
 <script data-template-name="mp4frag" type="text/html">
@@ -257,7 +289,7 @@
   <fieldset>
     <legend>External Api</legend>
 
-    <p class="form-tips">Unique value used for http routes and socket.io connections.</p>
+    <p class="form-tips">Unique value used for topics, socket.io, and http routes.</p>
 
     <div class="form-row">
       <label for="node-input-basePath"><i class="fa fa-globe"></i> Base Path</label>
@@ -265,10 +297,24 @@
       <input style="width:auto; max-width: 120px; text-align:center;" type="text" id="node-input-basePath" />
       <label for="node-input-basePath" style="width:auto;"><code>/{resource}</code></label>
     </div>
+
+    <p class="form-tips">Serve http routes for hls.m3u8.</p>
+
+    <div class="form-row">
+      <label for="node-input-serveHttp"><i class="fa fa-gears"></i> Serve Http</label>
+      <input id="node-input-serveHttp" />
+    </div>
+
+    <p class="form-tips">Serve socket.io connections for ui_mp4frag.</p>
+
+    <div class="form-row">
+      <label for="node-input-serveIo"><i class="fa fa-gears"></i> Serve Io</label>
+      <input id="node-input-serveIo" />
+    </div>
   </fieldset>
 
   <fieldset>
-    <legend>HLS Playlist</legend>
+    <legend>Buffered Segments</legend>
 
     <p class="form-tips">Number of current segments listed in playlist (held in memory).</p>
 

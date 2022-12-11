@@ -14,18 +14,19 @@ const { randomBytes } = require('crypto');
 
 const Mp4Frag = require('mp4frag');
 
-const { name: packageName, version: packageVersion } = require('./package.json');
+const { name: xPoweredByName, version: xPoweredByVersion } = require(require.resolve('mp4frag/package.json'));
 
 module.exports = RED => {
   const {
     httpNode,
     server,
-    settings,
-    settings: { httpNodeRoot },
+    settings: { httpNodeRoot, mp4frag: mp4fragSettings },
     _,
     nodes: { createNode, registerType },
     log: { error },
   } = RED;
+
+  const { httpMiddleware = null, ioMiddleware = null } = typeof mp4fragSettings === 'object' && mp4fragSettings !== null ? mp4fragSettings : {};
 
   class Mp4fragNode {
     constructor(config) {
@@ -33,27 +34,31 @@ module.exports = RED => {
 
       this.basePath = config.basePath === 'id' ? this.id : config.basePath;
 
-      this.hlsPlaylistSize = config.hlsPlaylistSize;
+      this.serveHttp = config.serveHttp !== 'false';
 
-      this.hlsPlaylistExtra = config.hlsPlaylistExtra;
+      this.serveIo = Io && config.serveIo !== 'false';
+
+      this.hlsPlaylistSize = Mp4fragNode.getInt(2, 20, 4, config.hlsPlaylistSize);
+
+      this.hlsPlaylistExtra = Mp4fragNode.getInt(0, 10, 0, config.hlsPlaylistExtra);
 
       this.autoStart = config.autoStart === 'true';
 
       this.repeated = config.repeated === 'true';
 
-      this.timeLimit = Mp4fragNode.getInt(-1, Number.MAX_SAFE_INTEGER, Mp4fragNode.timeLimit, config.timeLimit);
+      this.timeLimit = Mp4fragNode.getInt(-1, Number.MAX_SAFE_INTEGER, 10, config.timeLimit);
 
-      this.preBuffer = Mp4fragNode.getInt(0, 5, Mp4fragNode.preBuffer, config.preBuffer);
+      this.preBuffer = Mp4fragNode.getInt(0, 5, 1, config.preBuffer);
 
-      this.statusData = config.statusData === 'all' ? 'all' : 'playlist';
+      this.statusData = ['playlist', 'all'].includes(config.statusData) ? config.statusData : 'playlist';
 
-      this.serveHttp = config.serveHttp !== 'false'; // todo future config
-
-      this.serveIo = Io && config.serveIo !== 'false'; // todo future config
+      this.playlist = '';
 
       this.writing = false;
 
       this.displayedStatus = { http: 'off', io: 'off', buffer: 'off', fill: 'yellow' };
+
+      this.updateDisplayedStatus();
 
       try {
         this.createPaths(); // throws
@@ -91,7 +96,7 @@ module.exports = RED => {
         throw new Error(_('mp4frag.error.base_path_duplicate', { basePath: this.basePath }));
       }
 
-      Mp4fragNode.basePathMap.set(this.basePath, { id: this.id, running: false });
+      Mp4fragNode.basePathMap.set(this.basePath, { id: this.id, running: false, serveHttp: false, serveIo: false });
 
       this.topic = {
         status: `mp4frag/${this.basePath}/status`,
@@ -110,20 +115,18 @@ module.exports = RED => {
     }
 
     createMp4frag() {
-      // todo change hlsPlaylist options if serveHttp === false
-      this.mp4frag = new Mp4Frag({
-        hlsPlaylistBase: 'hls',
-        hlsPlaylistSize: this.hlsPlaylistSize,
-        hlsPlaylistExtra: this.hlsPlaylistExtra,
-        hlsPlaylistInit: true,
-      });
+      const mp4fragConfig = this.serveHttp
+        ? { hlsPlaylistBase: 'hls', hlsPlaylistSize: this.hlsPlaylistSize, hlsPlaylistExtra: this.hlsPlaylistExtra, hlsPlaylistInit: true }
+        : { segmentCount: this.hlsPlaylistSize + this.hlsPlaylistExtra };
+
+      this.mp4frag = new Mp4Frag(mp4fragConfig);
 
       this.mp4frag.on('initialized', data => {
         const { mime } = data;
 
         const { videoCodec, audioCodec } = this.mp4frag;
 
-        this.statusData === 'all' && this.send({ topic: this.topic.status, status: 'initialized', payload: { mime, videoCodec, audioCodec } });
+        this.statusData === 'all' && this.send({ _msgid: this._msgid, topic: this.topic.status, status: 'initialized', payload: { mime, videoCodec, audioCodec } });
 
         const item = Mp4fragNode.basePathMap.get(this.basePath);
 
@@ -139,7 +142,7 @@ module.exports = RED => {
               socketIo: this.socketIoClient,
             };
 
-            this.send({ topic: this.topic.status, status: 'playlist', payload: this.playlist });
+            this.send({ _msgid: this._msgid, topic: this.topic.status, status: 'playlist', payload: this.playlist });
           }
 
           if (this.autoStart === true) {
@@ -193,7 +196,8 @@ module.exports = RED => {
 
         const { totalDuration, totalByteLength } = this.mp4frag;
 
-        this.statusData === 'all' && this.send({ topic: this.topic.status, status: 'segment', payload: { sequence, duration, byteLength, keyframe, totalDuration, totalByteLength } });
+        this.statusData === 'all' &&
+          this.send({ _msgid: this._msgid, topic: this.topic.status, status: 'segment', payload: { sequence, duration, byteLength, keyframe, totalDuration, totalByteLength } });
       });
 
       this.mp4frag.on('error', error => {
@@ -219,7 +223,21 @@ module.exports = RED => {
 
         item.running = false;
 
-        this.playlist && this.send({ topic: this.topic.status, status: 'reset', payload: '' });
+        if (this.playlist) {
+          /* if (this.socketIoClient) {
+
+            // todo also have to terminate all sockets so that they can use new ioKey
+
+            this.ioKey = randomBytes(15).toString('hex');
+
+            this.socketIoClient.key = this.ioKey;
+
+          }*/
+
+          this.playlist = '';
+
+          this.send({ _msgid: this._msgid, topic: this.topic.status, status: 'reset', payload: this.playlist });
+        }
 
         this.displayedStatus.fill = 'yellow';
 
@@ -395,6 +413,10 @@ module.exports = RED => {
           }
         });
 
+        const item = Mp4fragNode.basePathMap.get(this.basePath);
+
+        item.serveIo = true;
+
         this.displayedStatus.io = 'on';
 
         this.updateDisplayedStatus();
@@ -438,80 +460,73 @@ module.exports = RED => {
     }
 
     createHttpRoute() {
-      if (this.serveHttp) {
-        if (typeof Mp4fragNode.httpRouter === 'undefined') {
-          Mp4fragNode.httpRouter = Router({ caseSensitive: true });
+      if (typeof Mp4fragNode.httpRouter === 'undefined') {
+        Mp4fragNode.httpRouter = Router({ caseSensitive: true });
 
-          Mp4fragNode.httpRouter.mp4fragRouter = true;
+        Mp4fragNode.httpRouter.mp4fragRouter = true;
 
-          Mp4fragNode.httpRouter.use((req, res, next) => {
-            res.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+        Mp4fragNode.httpRouter.use((req, res, next) => {
+          res.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
 
-            res.set('Expires', '-1');
+          res.set('Expires', '-1');
 
-            res.set('Pragma', 'no-cache');
+          res.set('Pragma', 'no-cache');
 
-            // overwrite X-Powered-By Express header
-            res.set('X-Powered-By', `${packageName} ${packageVersion}`);
+          // overwrite X-Powered-By Express header
+          res.set('X-Powered-By', Mp4fragNode.xPoweredBy);
 
-            // note: X-Powered-By can be only removed from Router in middleware calling res.removeHeader('X-Powered-By');
+          // note: X-Powered-By can be only removed from Router in middleware calling res.removeHeader('X-Powered-By');
 
-            next();
-          });
+          next();
+        });
 
-          if (Mp4fragNode.httpMiddleware !== null) {
-            Mp4fragNode.httpRouter.use(Mp4fragNode.httpMiddleware);
-          }
-
-          Mp4fragNode.httpRouter.get('/', (req, res) => {
-            let basePathArray = Array.from(Mp4fragNode.basePathMap);
-
-            res.type('json').send(JSON.stringify(basePathArray, null, 2));
-
-            // todo filter response based on user level/access
-            /* const { access } = res.locals;
-
-          if (Array.isArray(access) === false || access.length === 0 || access.includes('all')) {
-            return res.type('json').send(JSON.stringify(basePathArray, null, 2));
-          }
-
-          basePathArray = basePathArray.filter(( el ) => access.includes( el[0] ));
-
-          res.type('json').send(JSON.stringify(basePathArray, null, 2));*/
-          });
-
-          httpNode.use('/mp4frag', Mp4fragNode.httpRouter);
+        if (Mp4fragNode.httpMiddleware !== null) {
+          Mp4fragNode.httpRouter.use(Mp4fragNode.httpMiddleware);
         }
 
+        Mp4fragNode.httpRouter.get('/', (req, res) => {
+          let basePathArray = Array.from(Mp4fragNode.basePathMap);
+
+          res.type('json').send(JSON.stringify(basePathArray, null, 2));
+        });
+
+        httpNode.use('/mp4frag', Mp4fragNode.httpRouter);
+      }
+
+      const httpRouter = Router({ caseSensitive: true });
+
+      httpRouter.get('/', (req, res) => {
+        res.type('json');
+
+        res.send(
+          JSON.stringify(
+            { playlist: this.playlist, serveHttp: this.serveHttp, serveIo: this.serveIo, mp4frag: this.mp4frag },
+            (key, value) => {
+              if (value && value.type === 'Buffer') {
+                return `<Buffer ${value.data.length}>`;
+              }
+
+              if (key === 'm3u8' && typeof value === 'string') {
+                return value.split('\n').slice(0, -1);
+              }
+
+              return value;
+            },
+            2
+          )
+        );
+      });
+
+      httpRouter.basePath = this.basePath;
+
+      Mp4fragNode.httpRouter.use(`/${this.basePath}`, httpRouter);
+
+      if (this.serveHttp) {
         this.hlsPlaylistPath = `${httpNodeRoot}mp4frag/${this.basePath}/hls.m3u8`;
 
         this.mp4VideoPath = `${httpNodeRoot}mp4frag/${this.basePath}/video.mp4`;
 
         this.resWaitingForSegments = new Set();
-
-        const httpRouter = Router({ caseSensitive: true });
-
-        httpRouter.get('/', (req, res) => {
-          res.type('json');
-
-          res.send(
-            JSON.stringify(
-              { playlist: this.playlist, mp4frag: this.mp4frag },
-              (key, value) => {
-                if (value && value.type === 'Buffer') {
-                  return `<Buffer ${value.data.length}>`;
-                }
-
-                if (key === 'm3u8' && typeof value === 'string') {
-                  return value.split('\n').slice(0, -1);
-                }
-
-                return value;
-              },
-              2
-            )
-          );
-        });
 
         httpRouter.get('/video.mp4', (req, res) => {
           res.set('Accept-Ranges', 'none');
@@ -615,11 +630,13 @@ module.exports = RED => {
           res.status(404).send(_('mp4frag.error.mp4frag_not_found', { basePath: this.basePath }));
         });
 
-        httpRouter.basePath = this.basePath;
+        const item = Mp4fragNode.basePathMap.get(this.basePath);
 
-        Mp4fragNode.httpRouter.use(`/${this.basePath}`, httpRouter);
+        item.serveHttp = true;
 
         this.displayedStatus.http = 'on';
+
+        this.updateDisplayedStatus();
       }
     }
 
@@ -641,21 +658,21 @@ module.exports = RED => {
 
         this.resWaitingForSegments = undefined;
 
-        const { stack } = Mp4fragNode.httpRouter;
-
-        for (let i = stack.length - 1; i >= 0; --i) {
-          const layer = stack[i];
-
-          if (layer.name === 'router' && layer.handle.basePath === this.basePath) {
-            stack.splice(i, 1);
-
-            break;
-          }
-        }
-
         this.displayedStatus.http = 'off';
 
         this.updateDisplayedStatus();
+      }
+
+      const { stack } = Mp4fragNode.httpRouter;
+
+      for (let i = stack.length - 1; i >= 0; --i) {
+        const layer = stack[i];
+
+        if (layer.name === 'router' && layer.handle.basePath === this.basePath) {
+          stack.splice(i, 1);
+
+          break;
+        }
       }
     }
 
@@ -709,9 +726,7 @@ module.exports = RED => {
         return;
       }
 
-      // const filename = Mp4fragNode.filenameFunc({ basePath: this.basePath });
-
-      this.send([null, { topic: this.topic.buffer.init, retain: true, writeMode, payload: initialization /* , filename*/ /* , action: { command: 'start' }*/, duration }]);
+      this.send([null, { _msgid: this._msgid, topic: this.topic.buffer.init, retain: true, payload: initialization, duration }]);
 
       if (preBuffer > 0) {
         const lastIndex = this.mp4frag.getSegmentObjectLastIndex(preBuffer);
@@ -726,7 +741,7 @@ module.exports = RED => {
           segmentObjects.slice(lastIndex).forEach(segmentObject => {
             const { segment: payload, duration, timestamp, sequence } = segmentObject;
 
-            this.send([null, { topic, retain, writeMode, payload, /* filename, */ duration, timestamp, sequence }]);
+            this.send([null, { _msgid: this._msgid, topic, retain, payload, duration, timestamp, sequence }]);
           });
         }
       }
@@ -739,7 +754,7 @@ module.exports = RED => {
         case 'unlimited':
           {
             this.mp4fragWriter = (segment, sequence, duration, timestamp) => {
-              this.send([null, { topic, retain, writeMode, payload: segment, /* filename, */ sequence, duration, timestamp }]);
+              this.send([null, { _msgid: this._msgid, topic, retain, payload: segment, sequence, duration, timestamp }]);
             };
           }
           break;
@@ -749,7 +764,7 @@ module.exports = RED => {
             this.endTime = Date.now() + timeLimit;
 
             this.mp4fragWriter = (segment, sequence, duration, timestamp) => {
-              this.send([null, { topic, retain, writeMode, payload: segment, /* filename, */ sequence, duration, timestamp }]);
+              this.send([null, { _msgid: this._msgid, topic, retain, payload: segment, sequence, duration, timestamp }]);
 
               if (Date.now() >= this.endTime) {
                 this.stopWriting();
@@ -763,7 +778,7 @@ module.exports = RED => {
             const endTime = Date.now() + timeLimit;
 
             this.mp4fragWriter = (segment, sequence, duration, timestamp) => {
-              this.send([null, { topic, retain, writeMode, payload: segment, /* filename, */ sequence, duration, timestamp }]);
+              this.send([null, { _msgid: this._msgid, topic, retain, payload: segment, sequence, duration, timestamp }]);
 
               if (Date.now() >= endTime) {
                 this.stopWriting();
@@ -782,8 +797,6 @@ module.exports = RED => {
       this.displayedStatus.buffer = 'on';
 
       this.updateDisplayedStatus();
-
-      // this.filename = filename;
     }
 
     stopWriting() {
@@ -791,17 +804,13 @@ module.exports = RED => {
         return;
       }
 
-      /* const { filename } = this;
-
-      this.filename = undefined;*/
-
       this.writeMode = undefined;
 
       this.mp4fragWriter = undefined;
 
       this.endTime = undefined;
 
-      this.send([null, { topic: this.topic.buffer.init, retain: true, payload: Buffer.allocUnsafe(0) /* , filename*/ }]);
+      this.send([null, { _msgid: this._msgid, topic: this.topic.buffer.init, retain: true, payload: Buffer.allocUnsafe(0) }]);
 
       this.writing = false;
 
@@ -812,6 +821,12 @@ module.exports = RED => {
 
     onInput(msg, send, done) {
       this.handleMsg(msg);
+
+      this._msgid = msg._msgid;
+
+      // this.lastSend = send;
+
+      // this.lastMsg = msg;
 
       done();
     }
@@ -884,36 +899,9 @@ module.exports = RED => {
 
       return Number.isNaN(int) ? def : int < min ? min : int > max ? max : int;
     }
-
-    /* static getFilenameFunc(filenameFunc) {
-      try {
-        if (typeof filenameFunc !== 'undefined' && typeof filenameFunc({ basePath: 'test' }) === 'string') {
-          return filenameFunc;
-        }
-      } catch (err) {
-        error(_('mp4frag.error.filenameFunc', { error: err.toString() }));
-      }
-      return args => `mp4frag/${args.basePath}/${Date.now()}.mp4`;
-    }*/
   }
 
-  if (typeof settings.mp4frag !== 'object') {
-    settings.mp4frag = {};
-  }
-
-  const { mp4frag } = settings;
-
-  mp4frag.autoStart = typeof mp4frag.autoStart === 'boolean' ? mp4frag.autoStart : false;
-
-  mp4frag.repeated = typeof mp4frag.repeated === 'boolean' ? mp4frag.repeated : false;
-
-  mp4frag.timeLimit = Mp4fragNode.getInt(-1, Number.MAX_SAFE_INTEGER, 10000, mp4frag.timeLimit);
-
-  mp4frag.preBuffer = Mp4fragNode.getInt(0, 5, 1, mp4frag.preBuffer);
-
-  // mp4frag.filenameFunc = Mp4fragNode.getFilenameFunc(mp4frag.filenameFunc);
-
-  const { httpMiddleware = null, ioMiddleware = null, autoStart, repeated, timeLimit, preBuffer /* , filenameFunc*/ } = mp4frag;
+  Mp4fragNode.xPoweredBy = `${xPoweredByName}@${xPoweredByVersion}`;
 
   Mp4fragNode.basePathRegex = /^[a-z\d_.]{1,50}$/i;
 
@@ -929,40 +917,18 @@ module.exports = RED => {
 
   Mp4fragNode.httpRouter = undefined;
 
-  Mp4fragNode.repeated = repeated;
-
-  Mp4fragNode.timeLimit = timeLimit;
-
-  Mp4fragNode.preBuffer = preBuffer;
-
-  // Mp4fragNode.filenameFunc = filenameFunc;
-
   Mp4fragNode.type = 'mp4frag';
 
-  const Mp4fragSettings = {
-    settings: {
-      mp4frag: {
-        value: {
-          autoStart,
-          preBuffer,
-          repeated,
-          timeLimit,
-        },
-        exportable: true,
-      },
-    },
-  };
-
-  registerType(Mp4fragNode.type, Mp4fragNode, Mp4fragSettings);
+  registerType(Mp4fragNode.type, Mp4fragNode);
 };
 
 Mp4Frag.prototype.toJSON = function () {
   return {
-    hlsPlaylistBase: this._hlsPlaylistBase,
-    hlsPlaylistInit: this._hlsPlaylistInit,
-    hlsPlaylistSize: this._hlsPlaylistSize,
-    hlsPlaylistExtra: this._hlsPlaylistExtra,
-    segmentCount: this._segmentCount,
+    hlsPlaylistBase: this._hlsPlaylistBase || null,
+    hlsPlaylistInit: this._hlsPlaylistInit || null,
+    hlsPlaylistSize: this._hlsPlaylistSize || null,
+    hlsPlaylistExtra: this._hlsPlaylistExtra || null,
+    segmentCount: this._segmentCount || null,
     initialization: this.initialization,
     allKeyframes: this.allKeyframes,
     videoCodec: this.videoCodec,
