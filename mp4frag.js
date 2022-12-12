@@ -25,7 +25,7 @@ module.exports = RED => {
     nodes: { createNode, registerType },
   } = RED;
 
-  const { httpMiddleware = null, ioMiddleware = null } = typeof mp4fragSettings === 'object' && mp4fragSettings !== null ? mp4fragSettings : {};
+  const { httpMiddleware = null, ioMiddleware = null } = mp4fragSettings instanceof Object ? mp4fragSettings : {};
 
   class Mp4fragNode {
     constructor(config) {

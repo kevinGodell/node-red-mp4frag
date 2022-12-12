@@ -1,8 +1,8 @@
 # node-red-contrib-mp4frag
 ######
-[![GitHub license](https://img.shields.io/badge/license-MIT-brightgreen.svg)](https://raw.githubusercontent.com/kevinGodell/node-red-contrib-mp4frag/master/LICENSE?token=ABOPHYQ73XPHMEGBSABCDJK7IKRQO)
-[![npm](https://img.shields.io/npm/dt/node-red-contrib-mp4frag.svg?style=flat-square)](https://www.npmjs.com/package/node-red-contrib-mp4frag)
-[![GitHub issues](https://img.shields.io/github/issues/kevinGodell/node-red-contrib-mp4frag.svg)](https://github.com/kevinGodell/node-red-contrib-mp4frag/issues)
+[![GitHub license](https://img.shields.io/badge/license-MIT-brightgreen.svg)](https://raw.githubusercontent.com/kevinGodell/node-red-mp4frag/master/LICENSE)
+[![npm](https://img.shields.io/npm/dt/@kevingodell/node-red-mp4frag.svg?style=flat-square)](https://www.npmjs.com/package/@kevingodell/node-red-mp4frag)
+[![GitHub issues](https://img.shields.io/github/issues/kevinGodell/node-red-mp4frag.svg)](https://github.com/kevinGodell/node-red-mp4frag/issues)
 #### What?
 - A node-red fragmented mp4 server.
 #### Why?
@@ -23,7 +23,7 @@
 - [mp4frag](https://www.npmjs.com/package/mp4frag)
 #### Installation
 ```
-npm install kevinGodell/node-red-contrib-mp4frag
+npm install @kevingodell/node-red-mp4frag
 ```
 
 #### Screenshots
