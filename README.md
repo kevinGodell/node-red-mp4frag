@@ -1,38 +1,36 @@
-# node-red-contrib-mp4frag
+# @kevingodell/node-red-mp4frag
 ######
 [![GitHub license](https://img.shields.io/badge/license-MIT-brightgreen.svg)](https://raw.githubusercontent.com/kevinGodell/node-red-mp4frag/master/LICENSE)
 [![npm](https://img.shields.io/npm/dt/@kevingodell/node-red-mp4frag.svg?style=flat-square)](https://www.npmjs.com/package/@kevingodell/node-red-mp4frag)
 [![GitHub issues](https://img.shields.io/github/issues/kevinGodell/node-red-mp4frag.svg)](https://github.com/kevinGodell/node-red-mp4frag/issues)
-#### What?
-- A node-red fragmented mp4 server.
-#### Why?
-- Needed for extracting a fragmented mp4 from a buffer stream.
-#### How?
-- Parses the fragments (initialization and segments) of the mp4.
-#### When?
-- Using ffmpeg to connect to a video source and piping out a fragmented mp4.
-#### Where?
-- Fragmented mp4 files will be available on http server.
-#### Requirements
-- Input must be a buffer stream containing a properly fragmented mp4.
-- ffmpeg flags: `-f mp4 -movflags +frag_keyframe+empty_moov+default_base_moof`.
-#### Links
-- [node-red](https://nodered.org/)
-- [ffmpeg](https://ffmpeg.org/)
-- [buffer](https://nodejs.org/api/buffer.html)
-- [mp4frag](https://www.npmjs.com/package/mp4frag)
-#### Installation
+
+**A [Node-RED](https://nodered.org/) node used for parsing fragmented mp4 video from [ffmpeg](https://ffmpeg.org/).**
+
+* designed to live stream mp4 video as HLS or socket.io to the ui_mp4frag node
+
+### Expectations:
+* You should have working knowledge of ffmpeg on the command line.
+* If you have difficulties making it work, please open a new [discussion](https://discourse.nodered.org/) and tag me `@kevinGodell`.
+* Do not send private messages asking for help because that will not benefit others with similar issues.
+
+### Installation:
+* go to the correct directory, usually ~/.node-red
+```
+cd ~/.node-red
+```
+* using npm
 ```
 npm install @kevingodell/node-red-mp4frag
 ```
+* reboot the node-red server
+```
+node-red-stop && node-red-start
+```
 
-#### Screenshots
-![mp4frag flow_1](https://raw.githubusercontent.com/kevinGodell/node-red-contrib-mp4frag/master/screenshots/mp4frag_flow_1.png)
+### Instructions:
+* See the detailed help text in the sidebar.
 
----
+### Screenshots:
 
-![mp4frag flow_2](https://raw.githubusercontent.com/kevinGodell/node-red-contrib-mp4frag/master/screenshots/mp4frag_flow_2.png)
-
----
-
-![mp4frag flow_3](https://raw.githubusercontent.com/kevinGodell/node-red-contrib-mp4frag/master/screenshots/mp4frag_flow_3.png)
+### Flows:
+https://github.com/kevinGodell/node-red-mp4frag/tree/master/examples
