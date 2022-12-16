@@ -6,10 +6,14 @@
 
 **A [Node-RED](https://nodered.org/) node used for parsing fragmented mp4 video from [ffmpeg](https://ffmpeg.org/).**
 
-* designed to live stream mp4 video as HLS or socket.io to the ui_mp4frag node
-
+* designed to live stream mp4 video via http or socket.io
+* video can be viewed in modern browsers using [HLS.js](https://github.com/video-dev/hls.js/)
+* video can be viewed in Safari browser using [native HLS](https://developer.apple.com/documentation/http_live_streaming)
+* compatible with [@kevingodell/node-red-ui-mp4frag](https://github.com/kevinGodell/node-red-ui-mp4frag)
 ### Expectations:
 * You should have working knowledge of ffmpeg on the command line.
+* Input MP4 video should be properly fragmented so that it is compatible.
+* When using ffmpeg, set `-movflags +frag_keyframe+empty_moov+default_base_moof`.
 * If you have difficulties making it work, please open a new [discussion](https://discourse.nodered.org/) and tag me `@kevinGodell`.
 * Do not send private messages asking for help because that will not benefit others with similar issues.
 
