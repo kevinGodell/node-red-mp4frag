@@ -37,7 +37,7 @@ node-red-stop && node-red-start
 ### Screenshots:
 <img width="500" alt="flow" src="https://user-images.githubusercontent.com/6091746/207752665-9fc6b534-533a-4a5e-884f-71ec4581fa0b.png">
 <img width="500" alt="properties" src="https://user-images.githubusercontent.com/6091746/207752801-95d4e014-3e8c-4e10-b318-51534c4f2ea1.png">
-<img width="500" alt="help" src="https://user-images.githubusercontent.com/6091746/207752847-c675dbe2-6cbc-41a3-af25-2ad4774e21a0.png">
+<img width="500" alt="help" src="https://user-images.githubusercontent.com/6091746/207995843-0b371b83-fbf3-4a42-bef0-e019ddf14b99.png">
 
 ### Flows:
 https://github.com/kevinGodell/node-red-mp4frag/tree/master/examples
