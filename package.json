@@ -42,15 +42,18 @@
     "utf-8-validate": "^5.0.10"
   },
   "peerDependencies": {
+    "express": ">=4",
     "socket.io": ">=2"
   },
   "peerDependenciesMeta": {
+    "express": {
+      "optional": false
+    },
     "socket.io": {
       "optional": true
     }
   },
   "dependencies": {
-    "express": "4",
     "mp4frag": "^0.6.0"
   },
   "files": [
