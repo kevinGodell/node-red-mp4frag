@@ -1,6 +1,6 @@
 {
   "name": "@kevingodell/node-red-mp4frag",
-  "version": "0.1.1-beta.0",
+  "version": "0.1.1-beta.1",
   "description": "Parse a fragmented mp4 from a buffer and send it to a downstream node or serve it via socket.io and http.",
   "main": "mp4frag.js",
   "scripts": {
