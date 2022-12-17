@@ -1,0 +1,204 @@
+[
+  {
+    "id": "c42c25270a7f0839",
+    "type": "ffmpeg",
+    "z": "192711ec92c89ffb",
+    "name": "",
+    "outputs": 3,
+    "cmdPath": "ffmpeg",
+    "cmdArgs": "[\"-loglevel\",\"+level+fatal\",\"-hide_banner\",\"-nostats\",\"-re\",\"-f\",\"lavfi\",\"-i\",\"testsrc=size=qcif:rate=5[out0];sine=f=100:b=4[out1]\",\"-f\",\"mp4\",\"-c:a\",\"aac\",\"-c:v\",\"libx264\",\"-profile:v\",\"high\",\"-level\",\"5.0\",\"-pix_fmt\",\"yuv420p\",\"-movflags\",\"+frag_keyframe+empty_moov+default_base_moof\",\"-g\",\"20\",\"-tune\",\"zerolatency\",\"-metadata\",\"title=test_source\",\"-t\",\"00:00:20\",\"pipe:1\"]",
+    "cmdOutputs": 2,
+    "killSignal": "SIGTERM",
+    "x": 320,
+    "y": 380,
+    "wires": [
+      [
+        "0999b917b712c6d9"
+      ],
+      [
+        "0999b917b712c6d9"
+      ],
+      [
+        "7e7de2b01f47ad20"
+      ]
+    ]
+  },
+  {
+    "id": "287ad0e772c43f30",
+    "type": "inject",
+    "z": "192711ec92c89ffb",
+    "name": "stop",
+    "props": [
+      {
+        "p": "action",
+        "v": "{\"command\":\"stop\"}",
+        "vt": "json"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 110,
+    "y": 400,
+    "wires": [
+      [
+        "c42c25270a7f0839"
+      ]
+    ]
+  },
+  {
+    "id": "b39b06f6e44fe6a3",
+    "type": "debug",
+    "z": "192711ec92c89ffb",
+    "name": "playlist",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": true,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "status",
+    "statusType": "msg",
+    "x": 1000,
+    "y": 340,
+    "wires": []
+  },
+  {
+    "id": "9a1005471319cd90",
+    "type": "inject",
+    "z": "192711ec92c89ffb",
+    "name": "start",
+    "props": [
+      {
+        "p": "action",
+        "v": "{\"command\":\"start\"}",
+        "vt": "json"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 110,
+    "y": 340,
+    "wires": [
+      [
+        "c42c25270a7f0839"
+      ]
+    ]
+  },
+  {
+    "id": "7e7de2b01f47ad20",
+    "type": "debug",
+    "z": "192711ec92c89ffb",
+    "name": "stderr",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "true",
+    "targetType": "full",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 530,
+    "y": 400,
+    "wires": []
+  },
+  {
+    "id": "05b728b6fc6aedca",
+    "type": "comment",
+    "z": "192711ec92c89ffb",
+    "name": "FFMPEG IS NOT INCLUDED WITH THIS NODE. IT MUST BE INSTALLED SEPARATELY.",
+    "info": "",
+    "x": 340,
+    "y": 60,
+    "wires": []
+  },
+  {
+    "id": "f25bb614570c51ab",
+    "type": "comment",
+    "z": "192711ec92c89ffb",
+    "name": "Create sample mp4 video using ffmpeg node and handle mp4frag status.",
+    "info": "",
+    "x": 300,
+    "y": 280,
+    "wires": []
+  },
+  {
+    "id": "d3ad206de187a9e5",
+    "type": "comment",
+    "z": "192711ec92c89ffb",
+    "name": "ENOENT error indicates that ffmpeg is not installed or its path is incorrect.",
+    "info": "",
+    "x": 300,
+    "y": 140,
+    "wires": []
+  },
+  {
+    "id": "fdced9c8ab398d1d",
+    "type": "comment",
+    "z": "192711ec92c89ffb",
+    "name": "The correct movflags must be used when generating compatible mp4 video.",
+    "info": "",
+    "x": 310,
+    "y": 100,
+    "wires": []
+  },
+  {
+    "id": "aa14669bc6897827",
+    "type": "comment",
+    "z": "192711ec92c89ffb",
+    "name": "For help, publicly tag me in the Node-RED forum @kevinGodell.",
+    "info": "`@kevinGodell`",
+    "x": 270,
+    "y": 180,
+    "wires": []
+  },
+  {
+    "id": "fa60a18ef0bd1131",
+    "type": "function",
+    "z": "192711ec92c89ffb",
+    "name": "status",
+    "func": "const { status, payload } = msg;\n\n// most frequent, handle segment status first\nif (status === 'segment') {\n\n    let { sequence, duration, totalDuration, byteLength, totalByteLength, keyframe } = payload;\n\n    // duration of current segment\n    duration = duration.toFixed(1);\n\n    // total duration of all segments\n    totalDuration = totalDuration.toFixed(1);\n\n    // byte length of current segment\n    byteLength = (byteLength / 1024).toFixed(0);\n\n    // total byte length of all segments\n    totalByteLength = (totalByteLength / 1024).toFixed(0);\n\n    // indicate if current segment contains keyframe\n    keyframe = keyframe ? 1 : 0;\n\n    const text = `${duration}/${totalDuration}(s), ${byteLength}/${totalByteLength}(KB), ${keyframe}, ${sequence}`;\n\n    node.status({ fill: 'green', shape: 'dot', text });\n\n    return null;\n\n}\n\n// 2nd most frequent, pass this msg along to ui_mp4frag\nif (status === 'playlist' || status === 'reset') {\n\n    return msg;\n\n}\n\n// least frequent, initialization fragment is parsed\nif (status === 'initialized') {\n\n    const { mime/*, videoCodec, audioCodec*/ } = payload;\n\n    // const text = `vc: ${videoCodec}, ac: ${audioCodec}`;\n\n    node.status({ fill: 'green', shape: 'dot', text: mime });\n\n    return null;\n\n}",
+    "outputs": 1,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 790,
+    "y": 380,
+    "wires": [
+      [
+        "b39b06f6e44fe6a3"
+      ]
+    ]
+  },
+  {
+    "id": "0999b917b712c6d9",
+    "type": "mp4frag",
+    "z": "192711ec92c89ffb",
+    "name": "",
+    "outputs": 2,
+    "basePath": "flow03",
+    "serveHttp": "true",
+    "serveIo": "true",
+    "hlsPlaylistSize": "5",
+    "hlsPlaylistExtra": "1",
+    "autoStart": "false",
+    "preBuffer": 1,
+    "timeLimit": 10000,
+    "repeated": "false",
+    "statusData": "all",
+    "x": 560,
+    "y": 340,
+    "wires": [
+      [
+        "fa60a18ef0bd1131"
+      ],
+      []
+    ]
+  }
+]
