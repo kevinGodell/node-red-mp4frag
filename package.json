@@ -16,6 +16,7 @@
     "url": "git+https://github.com/kevinGodell/node-red-mp4frag.git"
   },
   "keywords": [
+    "node-red",
     "buffer",
     "mp4",
     "fragmented",
