@@ -55,7 +55,7 @@
     }
   },
   "dependencies": {
-    "mp4frag": "^0.6.0"
+    "mp4frag": "github:kevingodell/mp4frag#dev"
   },
   "files": [
     "mp4frag.html",
