@@ -33,14 +33,14 @@
   },
   "homepage": "https://github.com/kevinGodell/node-red-mp4frag#readme",
   "devDependencies": {
-    "eslint": "^8.28.0",
-    "eslint-config-prettier": "^8.5.0",
+    "eslint": "^8.40.0",
+    "eslint-config-prettier": "^8.8.0",
     "eslint-plugin-prettier": "^4.2.1",
-    "prettier": "^2.7.1"
+    "prettier": "^2.8.8"
   },
   "optionalDependencies": {
     "bufferutil": "^4.0.7",
-    "utf-8-validate": "^5.0.10"
+    "utf-8-validate": "^6.0.3"
   },
   "peerDependencies": {
     "express": ">=4",
