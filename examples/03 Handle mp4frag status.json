@@ -187,6 +187,7 @@
     "serveIo": "true",
     "hlsPlaylistSize": "5",
     "hlsPlaylistExtra": "1",
+    "bufferPool": "0",
     "autoStart": "false",
     "preBuffer": 1,
     "timeLimit": 10000,
