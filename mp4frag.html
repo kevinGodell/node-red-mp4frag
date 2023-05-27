@@ -3,6 +3,7 @@
   const MP4FRAG = {
     hlsPlaylistSize: { def: 4, min: 2, max: 20 },
     hlsPlaylistExtra: { def: 0, min: 0, max: 10 },
+    bufferPool: { def: 0, min: 0, max: 1 },
     timeLimit: { def: 10000, min: -1, max: Number.MAX_SAFE_INTEGER },
     preBuffer: { def: 1, min: 0, max: 5 },
   };
@@ -52,6 +53,15 @@
           const int = Number.parseInt(hlsPlaylistExtra);
 
           return int >= MP4FRAG.hlsPlaylistExtra.min && int <= MP4FRAG.hlsPlaylistExtra.max;
+        },
+      },
+      bufferPool: {
+        value: MP4FRAG.bufferPool.def,
+        required: true,
+        validate: function (bufferPool) {
+          const int = Number.parseInt(bufferPool);
+
+          return int >= MP4FRAG.bufferPool.min && int <= MP4FRAG.bufferPool.max;
         },
       },
       autoStart: {
@@ -196,6 +206,21 @@
         })
         .prop('placeholder', hlsPlaylistExtraDef);
 
+      const bufferPoolDef = this._def.defaults.bufferPool.value;
+
+      const bufferPool = $('#node-input-bufferPool')
+        .spinner({
+          min: MP4FRAG.bufferPool.min,
+          max: MP4FRAG.bufferPool.max,
+          step: 1,
+          change: (event, ui) => {
+            const [int, changed] = getIntFromVal(MP4FRAG.bufferPool.min, MP4FRAG.bufferPool.max, bufferPoolDef, bufferPool.val());
+
+            changed ? bufferPool.val(int).change() : bufferPool.val(int);
+          },
+        })
+        .prop('placeholder', bufferPoolDef);
+
       const autoStart = $('#node-input-autoStart').typedInput({
         types: [
           {
@@ -336,6 +361,14 @@
       <label for="node-input-hlsPlaylistExtra"><i class="fa fa-list-ol"></i> Extra</label>
       <input style="width: auto; max-width: 130px; text-align:right; padding-right: 12px" id="node-input-hlsPlaylistExtra" />
       <label for="node-input-hlsPlaylistExtra">segments</label>
+    </div>
+
+    <p class="form-tips">Reuse buffers to reduce garbage collection (experimental).</p>
+
+    <div class="form-row">
+      <label for="node-input-bufferPool"><i class="fa fa-list-ol"></i> Pool</label>
+      <input style="width: auto; max-width: 130px; text-align:right; padding-right: 12px" id="node-input-bufferPool" />
+      <label for="node-input-bufferPool">length</label>
     </div>
   </fieldset>
 

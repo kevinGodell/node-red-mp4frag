@@ -41,6 +41,8 @@ module.exports = RED => {
 
       this.hlsPlaylistExtra = Mp4fragNode.getInt(0, 10, 0, config.hlsPlaylistExtra);
 
+      this.bufferPool = Mp4fragNode.getInt(0, 1, 0, config.bufferPool);
+
       this.autoStart = config.autoStart === 'true';
 
       this.repeated = config.repeated === 'true';
@@ -71,6 +73,8 @@ module.exports = RED => {
         this.on('input', this.onInput);
 
         this.on('close', this.onClose);
+
+        this.readyForBuffer = true;
       } catch (error) {
         this.error(error);
 
@@ -117,6 +121,8 @@ module.exports = RED => {
       const mp4fragConfig = this.serveHttp
         ? { hlsPlaylistBase: 'hls', hlsPlaylistSize: this.hlsPlaylistSize, hlsPlaylistExtra: this.hlsPlaylistExtra, hlsPlaylistInit: true }
         : { segmentCount: this.hlsPlaylistSize + this.hlsPlaylistExtra };
+
+      mp4fragConfig.pool = this.bufferPool;
 
       this.mp4frag = new Mp4Frag(mp4fragConfig);
 
@@ -203,6 +209,8 @@ module.exports = RED => {
         this.stopWriting();
 
         this.mp4frag.resetCache();
+
+        this.readyForBuffer = false;
 
         this.error(error);
 
@@ -679,6 +687,8 @@ module.exports = RED => {
       this.stopWriting();
 
       this.mp4frag.resetCache();
+
+      this.readyForBuffer = true;
     }
 
     destroy() {
@@ -833,7 +843,7 @@ module.exports = RED => {
 
       if (Buffer.isBuffer(payload)) {
         if (payload.length) {
-          this.mp4frag.write(payload);
+          this.readyForBuffer && this.mp4frag.write(payload);
         } else {
           // zero length buffer
 
@@ -919,34 +929,14 @@ module.exports = RED => {
   registerType(Mp4fragNode.type, Mp4fragNode);
 };
 
-Mp4Frag.prototype.toJSON = function () {
-  return {
-    hlsPlaylistBase: this._hlsPlaylistBase || null,
-    hlsPlaylistInit: this._hlsPlaylistInit || null,
-    hlsPlaylistSize: this._hlsPlaylistSize || null,
-    hlsPlaylistExtra: this._hlsPlaylistExtra || null,
-    segmentCount: this._segmentCount || null,
-    initialization: this.initialization,
-    allKeyframes: this.allKeyframes,
-    videoCodec: this.videoCodec,
-    audioCodec: this.audioCodec,
-    mime: this.mime,
-    m3u8: this.m3u8,
-    totalDuration: this.totalDuration,
-    totalByteLength: this.totalByteLength,
-    segmentObject: this.segmentObject,
-    segmentObjects: this.segmentObjects,
-  };
-};
-
 Mp4Frag.prototype.getSegmentObjectLastIndex = function (limit) {
   let lastIndex = -1;
 
-  if (this._segmentObjects && this._segmentObjects.length) {
+  if (this.segmentObjects && this.segmentObjects.length) {
     let count = 0;
 
-    for (let i = this._segmentObjects.length - 1; i >= 0 && count < limit; --i) {
-      if (this._allKeyframes || this._segmentObjects[i].keyframe) {
+    for (let i = this.segmentObjects.length - 1; i >= 0 && count < limit; --i) {
+      if (this.allKeyframes || this.segmentObjects[i].keyframe) {
         lastIndex = i;
 
         ++count;
