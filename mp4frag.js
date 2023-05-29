@@ -208,7 +208,7 @@ module.exports = RED => {
       this.mp4frag.on('error', error => {
         this.stopWriting();
 
-        this.mp4frag.resetCache();
+        this.mp4frag.reset();
 
         this.readyForBuffer = false;
 
@@ -261,7 +261,7 @@ module.exports = RED => {
 
       this.mp4frag.removeAllListeners('reset');
 
-      this.mp4frag.resetCache();
+      this.mp4frag.reset();
 
       this.mp4frag = undefined;
     }
@@ -473,11 +473,7 @@ module.exports = RED => {
         Mp4fragNode.httpRouter.mp4fragRouter = true;
 
         Mp4fragNode.httpRouter.use((req, res, next) => {
-          res.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
-
-          res.set('Expires', '-1');
-
-          res.set('Pragma', 'no-cache');
+          res.set('Cache-Control', 'no-store');
 
           // overwrite X-Powered-By Express header
           res.set('X-Powered-By', Mp4fragNode.xPoweredBy);
@@ -686,7 +682,7 @@ module.exports = RED => {
     reset() {
       this.stopWriting();
 
-      this.mp4frag.resetCache();
+      this.mp4frag.reset();
 
       this.readyForBuffer = true;
     }
